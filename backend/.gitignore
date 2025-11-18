@@ -1,7 +1,7 @@
 .env.local
 .env.production
 certs/
-aiven-ca.pem
+*.pem
 /dist
 /node_modules
 /build
