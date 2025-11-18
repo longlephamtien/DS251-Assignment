@@ -1,4 +1,6 @@
-# compiled output
+.env.local
+.env.production
+aiven-ca.pem
 /dist
 /node_modules
 /build
