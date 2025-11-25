@@ -1,17 +1,106 @@
-/* body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
-} */
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  /* Design tokens (duplicated for runtime CSS use) */
+  --color-primary: #3333A6;
+  --color-secondary: #5858F5;
+  --color-background: #F7F7FA;
+  --color-surface: #FFFFFF;
+  --color-accent: #FF8C00;
+  --color-text-main: #1A1A1A;
+  --color-text-sub: #5E5E6A;
+
+  /* semantic breakpoints (rem units to match Tailwind config) */
+  --screen-sm: 40rem;   /* 640px */
+  --screen-md: 48rem;   /* 768px */
+  --screen-lg: 64rem;   /* 1024px */
+  --screen-xl: 80rem;   /* 1280px */
+  --screen-2xl: 96rem;  /* 1536px */
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: Verdana, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--color-background);
+  color: var(--color-text-main);
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+
+/* Utility for surface cards */
+  .surface-card {
+  background-color: var(--color-surface);
+  box-shadow: 0 6px 18px rgba(33,33,33,0.06);
+  border-radius: 8px;
+}
+
+/* Design tokens via CSS variables (kept for raw css usage) */
+:root{
+  --color-primary: #3333A6;
+  --color-secondary: #5858F5;
+  --color-background: #F7F7FA;
+  --color-surface: #FFFFFF;
+  --color-accent: #FF8C00;
+  --color-text-main: #1A1A1A;
+  --color-text-sub: #5E5E6A;
+}
+
+@layer base {
+  html, body, #root {
+    height: 100%;
+    background-color: var(--color-background);
+  }
+
+  body {
+    font-family: Verdana, Arial, sans-serif;
+    color: var(--color-text-main);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* small utility to show current responsive breakpoint for debugging */
+  .screen-marker {
+    position: fixed;
+    left: 8px;
+    bottom: 8px;
+    z-index: 9999;
+    background: rgba(0,0,0,0.6);
+    color: white;
+    padding: 6px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    pointer-events: none;
+  }
+}
+
+/* -----------------------------
+   Header / layout helpers
+   ----------------------------- */
+/* Universal box-sizing and default font size requested in spec */
+*, *::before, *::after { box-sizing: border-box; }
+html { font-size: 14px; }
+
+/* Hide scrollbar for carousel */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Note: header layout uses Tailwind utility classes in `Header.jsx`. If you
+   want to add a background image for the top bar, add `public/assets/bg-top.png`
+   and use inline style or Tailwind plugin to reference it. */
+

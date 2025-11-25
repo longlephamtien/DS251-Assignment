@@ -2,12 +2,18 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
+import { PlatformProvider } from './context/PlatformContext';
+import { DeviceProvider } from './context/DeviceContext';
 import reportWebVitals from './reportWebVitals';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <App />
+    <PlatformProvider>
+      <DeviceProvider>
+        <App />
+      </DeviceProvider>
+    </PlatformProvider>
   </React.StrictMode>
 );
 
