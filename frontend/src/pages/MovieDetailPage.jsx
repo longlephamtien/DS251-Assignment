@@ -42,9 +42,6 @@ export default function MovieDetailPage() {
   const { slug } = useParams();
   const movie = movieDetailsData[slug];
   const [showBookingModal, setShowBookingModal] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [selectedTheater, setSelectedTheater] = useState(null);
-  const [selectedShowtime, setSelectedShowtime] = useState(null);
 
   if (!movie) {
     return (

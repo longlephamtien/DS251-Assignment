@@ -22,7 +22,7 @@ export default function Header() {
               <span className="text-gray-500">|</span>
               <button className="opacity-80 hover:text-white transition-colors">VN</button>
             </div>
-            <a href="/customer" className="hover:text-white transition-colors border-l border-gray-600 pl-4 flex items-center">
+            <a href="/login" className="hover:text-white transition-colors border-l border-gray-600 pl-4 flex items-center">
               <Icon name="user" className="inline-block w-4 h-4" />
               <span className="ml-1 hidden md:inline">Account</span>
             </a>

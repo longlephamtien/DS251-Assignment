@@ -1,11 +1,14 @@
-import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Icon from '../components/common/Icon';
 import Notification from '../components/common/Notification';
+import { useBooking } from '../context/BookingContext';
 
 export default function BookingPage() {
   const { theaterId, showtimeId, date } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { bookingData, updateBookingData } = useBooking();
   
   // Sample booking data - would come from API based on URL params
   const [bookingInfo] = useState({
@@ -23,8 +26,43 @@ export default function BookingPage() {
     }
   });
 
-  const [selectedSeats, setSelectedSeats] = useState([]);
-  const [movieCombo, setMovieCombo] = useState(0);
+  const [selectedSeats, setSelectedSeats] = useState(bookingData.selectedSeats || []);
+  const movieCombo = bookingData.comboTotal || 0;
+
+  // Load persisted state from location or context
+  useEffect(() => {
+    if (location.state?.selectedSeats) {
+      setSelectedSeats(location.state.selectedSeats);
+    } else if (bookingData.selectedSeats?.length > 0) {
+      setSelectedSeats(bookingData.selectedSeats);
+    }
+  }, [location.state, bookingData.selectedSeats]);
+
+  // Persist seat selection to context
+  useEffect(() => {
+    if (selectedSeats.length > 0) {
+      const seatsByType = selectedSeats.reduce((acc, seat) => {
+        const row = seat.charAt(0);
+        const seatRow = seatRows.find(r => r.row === row);
+        if (seatRow) {
+          const type = seatRow.type;
+          if (!acc[type]) {
+            acc[type] = { count: 0, seats: [], price: SEAT_PRICES[type] };
+          }
+          acc[type].count++;
+          acc[type].seats.push(seat);
+        }
+        return acc;
+      }, {});
+
+      updateBookingData({
+        selectedSeats,
+        seatTotal: calculateTotal(),
+        seatsByType,
+        bookingInfo
+      });
+    }
+  }, [selectedSeats]); // eslint-disable-line react-hooks/exhaustive-deps
   const [notification, setNotification] = useState({
     isOpen: false,
     title: '',

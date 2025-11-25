@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Icon from '../components/common/Icon';
+import { useBooking } from '../context/BookingContext';
 
 export default function ComboPage() {
   const { theaterId, showtimeId, date } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const { bookingData, updateBookingData } = useBooking();
   
-  // Get booking data from previous step
-  const { selectedSeats = [], bookingInfo = {}, seatTotal = 0, seatsByType = {} } = location.state || {};
+  // Get booking data from location state or context
+  const { selectedSeats = bookingData.selectedSeats || [], bookingInfo = bookingData.bookingInfo || {}, seatTotal = bookingData.seatTotal || 0, seatsByType = bookingData.seatsByType || {} } = location.state || bookingData;
 
   const [combos] = useState([
     {
@@ -63,7 +65,7 @@ export default function ComboPage() {
     },
     {
       id: 7,
-      name: 'CGV COMBO',
+      name: 'BKinema COMBO',
       items: '1 Large Popcorn + 2 Jumbo Drinks',
       description: 'Medium on showing date. Free upgrade flavor for Caramel. Apply holidays pricing for popcorn and soda for transactions with showtimes on holidays and Tet.',
       price: 115000,
@@ -79,7 +81,17 @@ export default function ComboPage() {
     }
   ]);
 
-  const [selectedCombos, setSelectedCombos] = useState({});
+  const [selectedCombos, setSelectedCombos] = useState(bookingData.selectedCombos || {});
+
+  // Persist combo selection to context
+  useEffect(() => {
+    const comboTotal = calculateComboTotal();
+    updateBookingData({
+      selectedCombos,
+      comboTotal,
+      totalPrice: seatTotal + comboTotal
+    });
+  }, [selectedCombos]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleQuantityChange = (comboId, change) => {
     setSelectedCombos(prev => {

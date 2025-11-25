@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Icon from '../components/common/Icon';
+import { useBooking } from '../context/BookingContext';
 import atmLogo from '../assets/atm-logo.png';
 import visaMasterLogo from '../assets/visa-mastercard-logo.png';
 import momoLogo from '../assets/momo-logo.png';
@@ -9,22 +10,22 @@ import vnpayLogo from '../assets/vnpay-logo.png';
 import shopeepayLogo from '../assets/shopeepay-logo.png';
 
 export default function PaymentPage() {
-  const { theaterId, showtimeId, date } = useParams();
+  const { date } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const { bookingData } = useBooking();
   
-  // Get booking data from previous steps
+  // Get booking data from location state or context
   const { 
-    selectedSeats = [], 
-    bookingInfo = {}, 
-    seatTotal = 0,
-    seatsByType = {},
-    selectedCombos = {},
-    comboTotal = 0,
-    totalPrice = 0
-  } = location.state || {};
+    selectedSeats = bookingData.selectedSeats || [], 
+    bookingInfo = bookingData.bookingInfo || {}, 
+    seatTotal = bookingData.seatTotal || 0,
+    seatsByType = bookingData.seatsByType || {},
+    comboTotal = bookingData.comboTotal || 0,
+    totalPrice = bookingData.totalPrice || 0
+  } = location.state || bookingData;
 
-  const [cgvPoints, setCgvPoints] = useState(0);
+  const [cgvPoints] = useState(0);
   const [pointsToUse, setPointsToUse] = useState(0);
   const [selectedPayment, setSelectedPayment] = useState('');
   const [agreeTerms, setAgreeTerms] = useState(false);
@@ -125,7 +126,7 @@ export default function PaymentPage() {
                       onClick={() => toggleSection('voucher')}
                       className="w-full bg-blue-50 border border-blue-200 px-4 py-3 rounded text-left font-semibold text-gray-900 hover:bg-blue-100"
                     >
-                      CGV Voucher
+                      BKinema Voucher
                     </button>
                     {expandedSection === 'voucher' && (
                       <div className="mt-2 p-4 bg-white border border-gray-200 rounded">
@@ -189,7 +190,7 @@ export default function PaymentPage() {
                       onClick={() => toggleSection('points')}
                       className="w-full bg-blue-50 border border-blue-200 px-4 py-3 rounded text-left font-semibold text-gray-900 hover:bg-blue-100"
                     >
-                      CGV Point
+                      BKinema Point
                     </button>
                     {expandedSection === 'points' && (
                       <div className="mt-2 p-4 bg-white border border-gray-200 rounded">
@@ -263,7 +264,7 @@ export default function PaymentPage() {
               <div className="border border-gray-300 rounded">
                 <div className="bg-gray-300 px-4 py-2">
                   <h3 className="font-bold text-gray-900">
-                    <span className="text-gray-600">Step 2: </span>CGV GIFT CARD
+                    <span className="text-gray-600">Step 2: </span>BKinema GIFT CARD
                   </h3>
                 </div>
                 <div className="p-4">
@@ -271,7 +272,7 @@ export default function PaymentPage() {
                     onClick={() => toggleSection('giftcard')}
                     className="w-full bg-blue-50 border border-blue-200 px-4 py-3 rounded text-left font-semibold text-gray-900 hover:bg-blue-100"
                   >
-                    CGV Gift Card
+                    BKinema Gift Card
                   </button>
                   {expandedSection === 'giftcard' && (
                     <div className="mt-2 p-4 bg-white border border-gray-200 rounded">
@@ -493,7 +494,7 @@ export default function PaymentPage() {
               {/* Theater Info */}
               <div className="text-left">
                 <p className="text-sm text-gray-300">Theater</p>
-                <p className="font-bold">{bookingInfo?.theater || 'CGV CT Plaza'}</p>
+                <p className="font-bold">{bookingInfo?.theater || 'BKinema CT Plaza'}</p>
                 <p className="text-sm text-gray-300">Showtimes</p>
                 <p className="font-bold">{bookingInfo?.showtime || '09:40'}, {bookingInfo?.date || date}</p>
                 <p className="text-sm text-gray-300">Screen</p>

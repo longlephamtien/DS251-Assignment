@@ -1,6 +1,5 @@
 import React from 'react';
 import HeroCarousel from '../components/home/HeroCarousel';
-import QuickLinks from '../components/home/QuickLinks';
 import MovieSection from '../components/home/MovieSection';
 import EventsSection from '../components/home/EventsSection';
 
@@ -10,11 +9,8 @@ export default function HomePage() {
       {/* Hero Carousel Section */}
       <HeroCarousel />
 
-      {/* Quick Access Links */}
-      {/* <QuickLinks /> */}
-
       {/* Movie Selection Section */}
-      <MovieSection title="MOVIE SELECTION" />
+      <MovieSection />
 
       {/* Events and Promotions Section */}
       <EventsSection />

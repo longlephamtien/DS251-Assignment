@@ -306,32 +306,6 @@ export default function GiftCardPage() {
           </div>
         </section>
       </div>
-
-      {/* CTA Section */}
-      <div className="bg-gradient-to-r from-primary to-secondary text-white py-16">
-        <div className="max-w-[1200px] mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold mb-4">Need Help?</h2>
-          <p className="text-lg mb-8 opacity-90">
-            Contact our customer service team for assistance with gift cards
-          </p>
-          <div className="flex gap-4 justify-center flex-wrap">
-            <a 
-              href="tel:19002312" 
-              className="bg-white text-primary px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors inline-flex items-center gap-2"
-            >
-              <span>📞</span>
-              <span>1900 2312</span>
-            </a>
-            <a 
-              href="mailto:support@bkinema.vn" 
-              className="bg-transparent border-2 border-white text-white px-8 py-3 rounded-lg font-semibold hover:bg-white/10 transition-colors inline-flex items-center gap-2"
-            >
-              <span>✉️</span>
-              <span>support@bkinema.vn</span>
-            </a>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

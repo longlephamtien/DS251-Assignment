@@ -13,3 +13,5 @@ export { default as BookingPage } from './BookingPage';
 export { default as ComboPage } from './ComboPage';
 export { default as PaymentPage } from './PaymentPage';
 export { default as CustomerPage } from './CustomerPage';
+export { default as LoginPage } from './LoginPage';
+export { default as RegisterPage } from './RegisterPage';

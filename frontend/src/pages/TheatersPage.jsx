@@ -35,7 +35,6 @@ export default function TheatersPage() {
   const [selectedCity, setSelectedCity] = useState('');
   const [selectedTheater, setSelectedTheater] = useState(null);
   const [activeTab, setActiveTab] = useState('schedule');
-  const [dateScrollPosition, setDateScrollPosition] = useState(0);
 
   const filteredTheaters = selectedCity 
     ? theatersData.filter(theater => theater.city === selectedCity)
