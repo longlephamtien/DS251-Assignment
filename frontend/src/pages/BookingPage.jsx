@@ -3,13 +3,15 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Icon from '../components/common/Icon';
 import Notification from '../components/common/Notification';
 import { useBooking } from '../context/BookingContext';
+import { showtimeService } from '../services/showtime.service';
+import { seatService } from '../services/seat.service';
 
 export default function BookingPage() {
   const { theaterId, showtimeId, date } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const { bookingData, updateBookingData } = useBooking();
-  
+
   // Sample booking data - would come from API based on URL params
   const [bookingInfo] = useState({
     theater: 'BKinema Hùng Vương Plaza',
@@ -28,6 +30,38 @@ export default function BookingPage() {
 
   const [selectedSeats, setSelectedSeats] = useState(bookingData.selectedSeats || []);
   const movieCombo = bookingData.comboTotal || 0;
+  const [apiSeats, setApiSeats] = useState([]);
+  const [loadingSeats, setLoadingSeats] = useState(false);
+
+  // Fetch showtime and seat data from API
+  useEffect(() => {
+    const fetchShowtimeAndSeats = async () => {
+      if (showtimeId) {
+        try {
+          setLoadingSeats(true);
+
+          // Fetch showtime data
+          const showtimeData = await showtimeService.getShowtimeById(showtimeId);
+
+          // Fetch seats using au_number and au_theater_id from showtime
+          if (showtimeData.au_number && showtimeData.au_theater_id) {
+            const seats = await seatService.getSeatsByAuditorium(
+              showtimeData.au_number,
+              parseInt(showtimeData.au_theater_id)
+            );
+            setApiSeats(seats);
+          }
+        } catch (error) {
+          console.error('Error fetching data:', error);
+        } finally {
+          setLoadingSeats(false);
+        }
+      }
+    };
+
+    fetchShowtimeAndSeats();
+  }, [showtimeId]);
+
 
   // Load persisted state from location or context
   useEffect(() => {
@@ -70,8 +104,34 @@ export default function BookingPage() {
     type: 'info'
   });
 
-  // Seat map data
-  const seatRows = [
+  // Transform API seats into UI format
+  const transformSeatsToRows = (seats) => {
+    if (!seats || seats.length === 0) return [];
+
+    // Group seats by row
+    const seatsByRow = seats.reduce((acc, seat) => {
+      if (!acc[seat.row_char]) {
+        acc[seat.row_char] = [];
+      }
+      acc[seat.row_char].push(seat);
+      return acc;
+    }, {});
+
+    // Convert to array format expected by UI
+    return Object.entries(seatsByRow).map(([row, rowSeats]) => {
+      // Sort by column number
+      const sortedSeats = rowSeats.sort((a, b) => a.column_number - b.column_number);
+
+      return {
+        row: row,
+        seats: sortedSeats.map(s => `${s.row_char}${s.column_number}`),
+        type: sortedSeats[0].type.toLowerCase()
+      };
+    }).sort((a, b) => a.row.localeCompare(b.row));
+  };
+
+  // Use API seats if available, otherwise use dummy data
+  const seatRows = apiSeats.length > 0 ? transformSeatsToRows(apiSeats) : [
     { row: 'A', seats: ['A10', 'A9', 'A8', 'A7', 'A6', 'A5', 'A4', 'A3', 'A2', 'A1'], type: 'standard' },
     { row: 'B', seats: ['B12', 'B11', 'B10', 'B9', 'B8', 'B7', 'B6', 'B5', 'B4', 'B3', 'B2', 'B1'], type: 'standard' },
     { row: 'C', seats: ['C12', 'C11', 'C10', 'C9', 'C8', 'C7', 'C6', 'C5', 'C4', 'C3', 'C2', 'C1'], type: 'standard' },
@@ -87,12 +147,20 @@ export default function BookingPage() {
     { row: 'M', seats: ['M10', 'M9', 'M8', 'M7', 'M6', 'M5', 'M4', 'M3', 'M2', 'M1'], type: 'sweetbox' }
   ];
 
-  // Seat pricing
-  const SEAT_PRICES = {
-    standard: 75000,
-    vip: 100000,
-    sweetbox: 150000
-  };
+  // Build dynamic seat prices from API data
+  const SEAT_PRICES = apiSeats.length > 0
+    ? apiSeats.reduce((acc, seat) => {
+      const type = seat.type.toLowerCase();
+      if (!acc[type]) {
+        acc[type] = parseFloat(seat.price);
+      }
+      return acc;
+    }, {})
+    : {
+      standard: 75000,
+      vip: 100000,
+      sweetbox: 150000
+    };
 
   // Calculate total based on selected seats
   const calculateTotal = () => {
@@ -119,7 +187,7 @@ export default function BookingPage() {
 
     const row = seat.charAt(0);
     const seatRow = seatRows.find(r => r.row === row);
-    
+
     if (selectedSeats.includes(seat)) {
       // Deselect seat
       setSelectedSeats(selectedSeats.filter(s => s !== seat));
@@ -128,7 +196,7 @@ export default function BookingPage() {
       if (selectedSeats.length > 0) {
         const firstSelectedSeat = selectedSeats[0];
         const firstSeatRow = seatRows.find(r => r.row === firstSelectedSeat.charAt(0));
-        
+
         if (firstSeatRow.type !== seatRow.type) {
           setNotification({
             isOpen: true,
@@ -142,7 +210,7 @@ export default function BookingPage() {
 
       // Check for empty seat between selected seats
       const newSelection = [...selectedSeats, seat];
-      
+
       // Group seats by row
       const seatsByRow = {};
       newSelection.forEach(s => {
@@ -196,11 +264,11 @@ export default function BookingPage() {
 
   const getSeatColor = (seat, type) => {
     const status = getSeatStatus(seat);
-    
+
     if (status === 'checked') return 'bg-red-600 text-white border-red-600';
     if (status === 'occupied') return 'bg-gray-400 text-white cursor-not-allowed';
     if (status === 'unavailable') return 'bg-gray-300 text-gray-500 cursor-not-allowed';
-    
+
     // Available seats
     if (type === 'vip') return 'bg-pink-200 text-gray-800 hover:bg-pink-300 border-pink-400';
     if (type === 'sweetbox') return 'bg-pink-400 text-white hover:bg-pink-500 border-pink-600';
@@ -365,7 +433,7 @@ export default function BookingPage() {
                       }
                       return acc;
                     }, {});
-                    
+
                     navigate(`/booking/combo/theater/${theaterId}/showtime/${showtimeId}/date/${date}`, {
                       state: {
                         selectedSeats,

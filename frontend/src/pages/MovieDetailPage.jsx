@@ -356,7 +356,6 @@ function BookingModal({ movie, dates, onClose }) {
       for (const theater of theaters) {
         try {
           const schedule = await theaterService.getSchedule(theater.id, selectedDate);
-          console.log("Schedule", schedule);
           schedules[theater.id] = schedule;
         } catch (err) {
           console.error(`Error fetching schedule for theater ${theater.id}:`, err);
