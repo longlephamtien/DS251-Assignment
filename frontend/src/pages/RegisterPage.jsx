@@ -2,22 +2,27 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Button from '../components/common/Button';
 import Icon from '../components/common/Icon';
+import Notification from '../components/common/Notification';
+import { authService } from '../services';
 
 const RegisterPage = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('register');
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [notification, setNotification] = useState({ isOpen: false, title: '', message: '', type: 'info' });
   const [formData, setFormData] = useState({
-    name: '',
-    phoneNumber: '',
+    fname: '',
+    minit: '',
+    lname: '',
     email: '',
     password: '',
     dayOfBirth: '',
     monthOfBirth: '',
     yearOfBirth: '',
     gender: 'Male',
-    region: '',
-    preferSite: '',
+    city: '',
+    district: '',
     captcha: '',
     agreeProcessData: true,
     agreeAccurateInfo: true,
@@ -36,33 +41,98 @@ const RegisterPage = () => {
     }));
   };
 
-  const handleRegister = (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault();
     
     // Validate required fields
-    const requiredFields = ['name', 'phoneNumber', 'email', 'password', 'dayOfBirth', 'monthOfBirth', 'yearOfBirth', 'region', 'preferSite', 'captcha'];
+    const requiredFields = ['fname', 'lname', 'email', 'password', 'city', 'captcha'];
     const missingFields = requiredFields.filter(field => !formData[field]);
     
     if (missingFields.length > 0) {
-      alert('Please fill in all required fields');
+      setNotification({
+        isOpen: true,
+        title: 'Validation Error',
+        message: 'Please fill in all required fields',
+        type: 'error'
+      });
       return;
     }
 
     if (formData.captcha !== captchaText) {
-      alert('Incorrect captcha');
+      setNotification({
+        isOpen: true,
+        title: 'Validation Error',
+        message: 'Incorrect captcha',
+        type: 'error'
+      });
       return;
     }
 
     if (!formData.agreeProcessData || !formData.agreeAccurateInfo || !formData.agreeCorrectEmail || !formData.agreeTerms) {
-      alert('Please agree to all terms and conditions');
+      setNotification({
+        isOpen: true,
+        title: 'Agreement Required',
+        message: 'Please agree to all terms and conditions',
+        type: 'warning'
+      });
       return;
     }
 
-    // TODO: Implement actual registration logic
-    console.log('Register attempt:', formData);
-    
-    // Navigate to login page on successful registration
-    navigate('/login');
+    // Prepare birthday
+    let birthday = null;
+    if (formData.dayOfBirth && formData.monthOfBirth && formData.yearOfBirth) {
+      const year = formData.yearOfBirth;
+      const month = String(formData.monthOfBirth).padStart(2, '0');
+      const day = String(formData.dayOfBirth).padStart(2, '0');
+      birthday = `${year}-${month}-${day}`;
+    }
+
+    // Map gender from FE (Male, Female, Rather not say) to BE (Male, Female, Other)
+    const genderMap = {
+      'Male': 'Male',
+      'Female': 'Female',
+      'Rather not say': 'Other'
+    };
+
+    const userData = {
+      fname: formData.fname,
+      minit: formData.minit || undefined,
+      lname: formData.lname,
+      email: formData.email,
+      password: formData.password,
+      birthday: birthday || undefined,
+      gender: genderMap[formData.gender],
+      city: formData.city,
+      district: formData.district || undefined,
+    };
+
+    try {
+      setLoading(true);
+      
+      await authService.register(userData);
+      
+      // Navigate to home page on successful registration
+      setNotification({
+        isOpen: true,
+        title: 'Success!',
+        message: 'Registration successful! Welcome to BKinema.',
+        type: 'success'
+      });
+      
+      setTimeout(() => {
+        navigate('/');
+      }, 2000);
+    } catch (err) {
+      console.error('Registration error:', err);
+      setNotification({
+        isOpen: true,
+        title: 'Registration Failed',
+        message: err.message || 'Registration failed. Please try again.',
+        type: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLoginClick = () => {
@@ -79,18 +149,26 @@ const RegisterPage = () => {
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 100 }, (_, i) => currentYear - i);
 
-  const regions = [
-    'Hà Nội', 'Hồ Chí Minh', 'Đà Nẵng', 'Hải Phòng', 'Cần Thơ',
-    'An Giang', 'Bà Rịa - Vũng Tàu', 'Bắc Giang', 'Bắc Kạn', 'Bạc Liêu'
-  ];
-
-  const preferSites = [
-    'BKinema Aeon Bình Tân', 'BKinema Aeon Tân Phú', 'BKinema Vincom Center', 
-    'BKinema Crescent Mall', 'BKinema Landmark', 'BKinema Pearl Plaza'
+  const cities = [
+    'Ho Chi Minh City', 'Ha Noi', 'Da Nang', 'Can Tho', 'Dong Nai',
+    'Hai Phong', 'Quang Ninh', 'Ba Ria - Vung Tau', 'Binh Dinh',
+    'Binh Duong', 'Dak Lak', 'Tra Vinh', 'Yen Bai', 'Vinh Long',
+    'Kien Giang', 'Hau Giang', 'Ha Tinh', 'Phu Yen', 'Dong Thap',
+    'Bac Lieu', 'Hung Yen', 'Khanh Hoa', 'Kon Tum', 'Lang Son',
+    'Nghe An', 'Phu Tho', 'Quang Ngai', 'Soc Trang', 'Son La',
+    'Tay Ninh', 'Thai Nguyen', 'Tien Giang'
   ];
 
   return (
     <div className="min-h-screen bg-background py-8">
+      <Notification
+        isOpen={notification.isOpen}
+        onClose={() => setNotification({ ...notification, isOpen: false })}
+        title={notification.title}
+        message={notification.message}
+        type={notification.type}
+      />
+      
       <div className="container mx-auto px-4">
         <div className="max-w-2xl mx-auto">
           {/* Register Form */}
@@ -126,32 +204,48 @@ const RegisterPage = () => {
 
               {/* Register Form */}
               <form onSubmit={handleRegister} className="space-y-4">
-                {/* Name */}
+                {/* First Name */}
                 <div>
                   <label className="block text-sm font-bold text-gray-900 mb-1">
-                    Name<span className="text-primary">*</span>
+                    First Name<span className="text-primary">*</span>
                   </label>
                   <input
                     type="text"
-                    name="name"
-                    value={formData.name}
+                    name="fname"
+                    value={formData.fname}
                     onChange={handleInputChange}
-                    placeholder="Name"
+                    placeholder="First Name"
                     className="w-full px-4 py-2.5 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                   />
                 </div>
 
-                {/* Phone Number */}
+                {/* Middle Initial */}
                 <div>
                   <label className="block text-sm font-bold text-gray-900 mb-1">
-                    Phone number<span className="text-primary">*</span>
+                    Middle Initial <span className="text-gray-500 text-xs">(Optional)</span>
                   </label>
                   <input
-                    type="tel"
-                    name="phoneNumber"
-                    value={formData.phoneNumber}
+                    type="text"
+                    name="minit"
+                    value={formData.minit}
                     onChange={handleInputChange}
-                    placeholder="Phone number"
+                    placeholder="Middle Initial"
+                    maxLength="10"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                </div>
+
+                {/* Last Name */}
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-1">
+                    Last Name<span className="text-primary">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="lname"
+                    value={formData.lname}
+                    onChange={handleInputChange}
+                    placeholder="Last Name"
                     className="w-full px-4 py-2.5 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                   />
                 </div>
@@ -182,7 +276,7 @@ const RegisterPage = () => {
                       name="password"
                       value={formData.password}
                       onChange={handleInputChange}
-                      placeholder="Password"
+                      placeholder="Password (minimum 6 characters)"
                       className="w-full px-4 py-2.5 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                     />
                     <button
@@ -198,7 +292,7 @@ const RegisterPage = () => {
                 {/* Date of Birth */}
                 <div>
                   <label className="block text-sm font-bold text-gray-900 mb-1">
-                    Date of Birth<span className="text-primary">*</span>
+                    Date of Birth <span className="text-gray-500 text-xs">(Optional)</span>
                   </label>
                   <div className="grid grid-cols-3 gap-2">
                     <select
@@ -235,7 +329,14 @@ const RegisterPage = () => {
                       ))}
                     </select>
                   </div>
-                  <div className="flex gap-4 mt-2">
+                </div>
+
+                {/* Gender */}
+                <div>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">
+                    Gender
+                  </label>
+                  <div className="flex gap-4">
                     <label className="flex items-center">
                       <input
                         type="radio"
@@ -262,50 +363,47 @@ const RegisterPage = () => {
                       <input
                         type="radio"
                         name="gender"
-                        value="None"
-                        checked={formData.gender === 'None'}
+                        value="Rather not say"
+                        checked={formData.gender === 'Rather not say'}
                         onChange={handleInputChange}
                         className="mr-2"
                       />
-                      <span className="text-sm">None</span>
+                      <span className="text-sm">Rather not say</span>
                     </label>
                   </div>
                 </div>
 
-                {/* Region */}
+                {/* City */}
                 <div>
                   <label className="block text-sm font-bold text-gray-900 mb-1">
-                    Region<span className="text-primary">*</span>
+                    City<span className="text-primary">*</span>
                   </label>
                   <select
-                    name="region"
-                    value={formData.region}
+                    name="city"
+                    value={formData.city}
                     onChange={handleInputChange}
                     className="w-full px-4 py-2.5 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                   >
-                    <option value="">Region</option>
-                    {regions.map(region => (
-                      <option key={region} value={region}>{region}</option>
+                    <option value="">Select City</option>
+                    {cities.map(city => (
+                      <option key={city} value={city}>{city}</option>
                     ))}
                   </select>
                 </div>
 
-                {/* Prefer Site */}
+                {/* District */}
                 <div>
                   <label className="block text-sm font-bold text-gray-900 mb-1">
-                    Prefer Site<span className="text-primary">*</span>
+                    District <span className="text-gray-500 text-xs">(Optional)</span>
                   </label>
-                  <select
-                    name="preferSite"
-                    value={formData.preferSite}
+                  <input
+                    type="text"
+                    name="district"
+                    value={formData.district}
                     onChange={handleInputChange}
+                    placeholder="Enter your district"
                     className="w-full px-4 py-2.5 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                  >
-                    <option value="">Prefer Site</option>
-                    {preferSites.map(site => (
-                      <option key={site} value={site}>{site}</option>
-                    ))}
-                  </select>
+                  />
                 </div>
 
                 {/* Captcha */}
@@ -404,9 +502,10 @@ const RegisterPage = () => {
                 {/* Submit Button */}
                 <Button
                   type="submit"
-                  className="w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 text-lg"
+                  disabled={loading}
+                  className="w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  REGISTER
+                  {loading ? 'REGISTERING...' : 'REGISTER'}
                 </Button>
               </form>
             </div>

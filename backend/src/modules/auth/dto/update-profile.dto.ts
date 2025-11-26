@@ -1,8 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsOptional, IsDateString, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsNotEmpty } from 'class-validator';
 import { Gender } from '../../user/entities/user.entity';
 
 export class UpdateProfileDto {
+  @ApiProperty({ description: 'Current password for verification', example: 'password123' })
+  @IsNotEmpty()
+  @IsString()
+  currentPassword: string;
+
   @ApiPropertyOptional({ description: 'First name', example: 'John' })
   @IsOptional()
   @IsString()
@@ -18,10 +23,7 @@ export class UpdateProfileDto {
   @IsString()
   lname?: string;
 
-  @ApiPropertyOptional({ description: 'Date of birth', example: '1990-01-15' })
-  @IsOptional()
-  @IsDateString()
-  birthday?: string;
+  // Birthday is NOT allowed to be changed, so it's removed from UpdateProfileDto
 
   @ApiPropertyOptional({ description: 'Gender', enum: Gender, example: Gender.MALE })
   @IsOptional()

@@ -1,5 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Icon from '../components/common/Icon';
+import Notification from '../components/common/Notification';
+import { authService } from '../services';
 
 // Tab Components
 const DashboardTab = () => {
@@ -54,22 +57,86 @@ const DashboardTab = () => {
 };
 
 const AccountDetailsTab = () => {
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [notification, setNotification] = useState({ isOpen: false, title: '', message: '', type: 'info' });
+  const [profile, setProfile] = useState(null);
   const [formData, setFormData] = useState({
-    name: 'Lê Phạm Tiến Long',
-    telephone: '0947396252',
-    gender: 'male',
-    dateOfBirth: '2005-12-23',
-    email: 'lephamtienlong.4754@gmail.com',
-    cityProvince: 'Hồ Chí Minh',
-    district: 'Quận 10',
-    streetAddress: 'No name',
+    fname: '',
+    minit: '',
+    lname: '',
+    gender: 'Male',
+    city: '',
+    district: '',
     currentPassword: '',
     changePassword: false,
     newPassword: '',
     confirmPassword: '',
-    memberCardNumber: '9992-5884-4608-8391',
-    preferSite: 'BKinema Su Van Hanh',
   });
+
+  const cities = [
+    'Ho Chi Minh City', 'Ha Noi', 'Da Nang', 'Can Tho', 'Dong Nai',
+    'Hai Phong', 'Quang Ninh', 'Ba Ria - Vung Tau', 'Binh Dinh',
+    'Binh Duong', 'Dak Lak', 'Tra Vinh', 'Yen Bai', 'Vinh Long',
+    'Kien Giang', 'Hau Giang', 'Ha Tinh', 'Phu Yen', 'Dong Thap',
+    'Bac Lieu', 'Hung Yen', 'Khanh Hoa', 'Kon Tum', 'Lang Son',
+    'Nghe An', 'Phu Tho', 'Quang Ngai', 'Soc Trang', 'Son La',
+    'Tay Ninh', 'Thai Nguyen', 'Tien Giang'
+  ];
+
+  // Map gender from BE to FE
+  const mapGenderFromBE = (gender) => {
+    if (gender === 'Other') return 'Rather not say';
+    return gender;
+  };
+
+  const mapGenderToBE = (gender) => {
+    if (gender === 'Rather not say') return 'Other';
+    return gender;
+  };
+
+  useEffect(() => {
+    if (!authService.isAuthenticated()) {
+      navigate('/login');
+      return;
+    }
+    loadProfile();
+  }, [navigate]);
+
+  const loadProfile = async () => {
+    try {
+      setProfileLoading(true);
+      const data = await authService.getProfile();
+      setProfile(data);
+      
+      setFormData({
+        fname: data.fname || '',
+        minit: data.minit || '',
+        lname: data.lname || '',
+        gender: mapGenderFromBE(data.gender) || 'Male',
+        city: data.city || '',
+        district: data.district || '',
+        currentPassword: '',
+        changePassword: false,
+        newPassword: '',
+        confirmPassword: '',
+      });
+    } catch (err) {
+      console.error('Load profile error:', err);
+      setNotification({
+        isOpen: true,
+        title: 'Error',
+        message: err.message || 'Failed to load profile',
+        type: 'error'
+      });
+      if (err.message.includes('No authentication token')) {
+        navigate('/login');
+      }
+    } finally {
+      setProfileLoading(false);
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -79,8 +146,124 @@ const AccountDetailsTab = () => {
     }));
   };
 
+  const handleSave = async () => {
+    // Validate current password is required
+    if (!formData.currentPassword) {
+      setNotification({
+        isOpen: true,
+        title: 'Validation Error',
+        message: 'Current password is required to make changes',
+        type: 'warning'
+      });
+      return;
+    }
+
+    // If changing password, validate
+    if (formData.changePassword) {
+      if (!formData.newPassword || !formData.confirmPassword) {
+        setNotification({
+          isOpen: true,
+          title: 'Validation Error',
+          message: 'Please enter new password and confirmation',
+          type: 'warning'
+        });
+        return;
+      }
+      if (formData.newPassword !== formData.confirmPassword) {
+        setNotification({
+          isOpen: true,
+          title: 'Validation Error',
+          message: 'New passwords do not match',
+          type: 'error'
+        });
+        return;
+      }
+      if (formData.newPassword.length < 6) {
+        setNotification({
+          isOpen: true,
+          title: 'Validation Error',
+          message: 'New password must be at least 6 characters',
+          type: 'warning'
+        });
+        return;
+      }
+    }
+
+    try {
+      setLoading(true);
+
+      // Update profile with current password
+      const updateData = {
+        currentPassword: formData.currentPassword,
+        fname: formData.fname,
+        minit: formData.minit || undefined,
+        lname: formData.lname,
+        gender: mapGenderToBE(formData.gender),
+        city: formData.city,
+        district: formData.district || undefined,
+      };
+
+      await authService.updateProfile(updateData);
+
+      // If changing password, do it separately
+      if (formData.changePassword) {
+        await authService.changePassword(formData.currentPassword, formData.newPassword);
+        setNotification({
+          isOpen: true,
+          title: 'Success',
+          message: 'Profile and password updated successfully!',
+          type: 'success'
+        });
+      } else {
+        setNotification({
+          isOpen: true,
+          title: 'Success',
+          message: 'Profile updated successfully!',
+          type: 'success'
+        });
+      }
+
+      // Clear password fields and reload profile
+      setFormData(prev => ({
+        ...prev,
+        currentPassword: '',
+        changePassword: false,
+        newPassword: '',
+        confirmPassword: '',
+      }));
+      
+      await loadProfile();
+    } catch (err) {
+      console.error('Update error:', err);
+      setNotification({
+        isOpen: true,
+        title: 'Update Failed',
+        message: err.message || 'Failed to update profile',
+        type: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (profileLoading) {
+    return (
+      <div className="bg-white rounded-lg shadow-card p-8">
+        <p className="text-center text-gray-600">Loading profile...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-card p-8">
+      <Notification
+        isOpen={notification.isOpen}
+        onClose={() => setNotification({ ...notification, isOpen: false })}
+        title={notification.title}
+        message={notification.message}
+        type={notification.type}
+      />
+      
       <h2 className="text-2xl font-bold text-center bg-primary text-white py-4 -mx-8 -mt-8 mb-8">
         EDIT ACCOUNT DETAIL
       </h2>
@@ -90,12 +273,12 @@ const AccountDetailsTab = () => {
         <div className="space-y-4">
           <div>
             <label className="block text-text-main font-semibold mb-2">
-              Name <span className="text-red-500">*</span>
+              First Name <span className="text-primary">*</span>
             </label>
             <input
               type="text"
-              name="name"
-              value={formData.name}
+              name="fname"
+              value={formData.fname}
               onChange={handleChange}
               className="w-full px-4 py-2 border-2 border-primary rounded focus:outline-none focus:ring-2 focus:ring-secondary"
             />
@@ -103,28 +286,42 @@ const AccountDetailsTab = () => {
 
           <div>
             <label className="block text-text-main font-semibold mb-2">
-              Telephone <span className="text-red-500">*</span>
+              Middle Initial
             </label>
             <input
-              type="tel"
-              name="telephone"
-              value={formData.telephone}
+              type="text"
+              name="minit"
+              value={formData.minit}
               onChange={handleChange}
+              maxLength="10"
               className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-secondary"
             />
           </div>
 
           <div>
             <label className="block text-text-main font-semibold mb-2">
-              Gender <span className="text-red-500">*</span>
+              Last Name <span className="text-primary">*</span>
+            </label>
+            <input
+              type="text"
+              name="lname"
+              value={formData.lname}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border-2 border-primary rounded focus:outline-none focus:ring-2 focus:ring-secondary"
+            />
+          </div>
+
+          <div>
+            <label className="block text-text-main font-semibold mb-2">
+              Gender <span className="text-primary">*</span>
             </label>
             <div className="flex gap-4">
               <label className="flex items-center">
                 <input
                   type="radio"
                   name="gender"
-                  value="male"
-                  checked={formData.gender === 'male'}
+                  value="Male"
+                  checked={formData.gender === 'Male'}
                   onChange={handleChange}
                   className="mr-2 accent-primary"
                 />
@@ -134,8 +331,8 @@ const AccountDetailsTab = () => {
                 <input
                   type="radio"
                   name="gender"
-                  value="female"
-                  checked={formData.gender === 'female'}
+                  value="Female"
+                  checked={formData.gender === 'Female'}
                   onChange={handleChange}
                   className="mr-2 accent-primary"
                 />
@@ -145,26 +342,30 @@ const AccountDetailsTab = () => {
                 <input
                   type="radio"
                   name="gender"
-                  value="none"
-                  checked={formData.gender === 'none'}
+                  value="Rather not say"
+                  checked={formData.gender === 'Rather not say'}
                   onChange={handleChange}
                   className="mr-2 accent-primary"
                 />
-                None
+                Rather not say
               </label>
             </div>
           </div>
 
           <div>
             <label className="block text-text-main font-semibold mb-2">Date of Birth</label>
-            <p className="text-text-main">{new Date(formData.dateOfBirth).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).toUpperCase()}</p>
+            <p className="text-text-main">
+              {profile?.birthday 
+                ? new Date(profile.birthday).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).toUpperCase()
+                : 'Not set'}
+            </p>
           </div>
 
           <div>
             <label className="block text-text-main font-semibold mb-2">
-              Email Address <span className="text-red-500">*</span>
+              Email Address
             </label>
-            <p className="text-text-main">{formData.email}</p>
+            <p className="text-text-main">{profile?.email}</p>
           </div>
 
           <div>
@@ -185,44 +386,29 @@ const AccountDetailsTab = () => {
         <div className="space-y-4">
           <div>
             <label className="block text-text-main font-semibold mb-2">
-              City/Province <span className="text-red-500">*</span>
+              City <span className="text-primary">*</span>
             </label>
             <select
-              name="cityProvince"
-              value={formData.cityProvince}
+              name="city"
+              value={formData.city}
               onChange={handleChange}
               className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-secondary"
             >
-              <option value="Hồ Chí Minh">Hồ Chí Minh</option>
-              <option value="Hà Nội">Hà Nội</option>
-              <option value="Đà Nẵng">Đà Nẵng</option>
+              <option value="">Select City</option>
+              {cities.map(city => (
+                <option key={city} value={city}>{city}</option>
+              ))}
             </select>
           </div>
 
           <div>
             <label className="block text-text-main font-semibold mb-2">
-              District <span className="text-red-500">*</span>
-            </label>
-            <select
-              name="district"
-              value={formData.district}
-              onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-secondary"
-            >
-              <option value="Quận 10">Quận 10</option>
-              <option value="Quận 1">Quận 1</option>
-              <option value="Quận 3">Quận 3</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-text-main font-semibold mb-2">
-              Street Address <span className="text-red-500">*</span>
+              District
             </label>
             <input
               type="text"
-              name="streetAddress"
-              value={formData.streetAddress}
+              name="district"
+              value={formData.district}
               onChange={handleChange}
               className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-secondary"
             />
@@ -230,7 +416,7 @@ const AccountDetailsTab = () => {
 
           <div>
             <label className="block text-text-main font-semibold mb-2">
-              Current Password <span className="text-red-500">*</span>
+              Current Password <span className="text-primary">*</span>
             </label>
             <input
               type="password"
@@ -238,6 +424,7 @@ const AccountDetailsTab = () => {
               value={formData.currentPassword}
               onChange={handleChange}
               className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-secondary"
+              placeholder="Enter current password"
             />
           </div>
 
@@ -245,7 +432,7 @@ const AccountDetailsTab = () => {
             <>
               <div>
                 <label className="block text-text-main font-semibold mb-2">
-                  New Password <span className="text-red-500">*</span>
+                  New Password <span className="text-primary">*</span>
                 </label>
                 <input
                   type="password"
@@ -253,13 +440,13 @@ const AccountDetailsTab = () => {
                   value={formData.newPassword}
                   onChange={handleChange}
                   className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-secondary"
-                  placeholder="Enter new password"
+                  placeholder="Enter new password (min 6 characters)"
                 />
               </div>
 
               <div>
                 <label className="block text-text-main font-semibold mb-2">
-                  Confirm New Password <span className="text-red-500">*</span>
+                  Confirm New Password <span className="text-primary">*</span>
                 </label>
                 <input
                   type="password"
@@ -275,35 +462,20 @@ const AccountDetailsTab = () => {
         </div>
       </div>
 
-      {/* Optional Information */}
-      <div className="mt-8 pt-6 border-t border-gray-200">
-        <h3 className="text-lg font-bold text-text-main mb-4">Optional Information</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-text-main font-semibold mb-2">Member Card Number</label>
-            <p className="text-text-main">{formData.memberCardNumber}</p>
-          </div>
-          <div>
-            <label className="block text-text-main font-semibold mb-2">Prefer Site</label>
-            <select
-              name="preferSite"
-              value={formData.preferSite}
-              onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-secondary"
-            >
-              <option value="BKinema Su Van Hanh">BKinema Su Van Hanh</option>
-              <option value="BKinema Vincom">BKinema Vincom</option>
-              <option value="BKinema Landmark">BKinema Landmark</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
       {/* Actions */}
       <div className="flex justify-between items-center mt-8">
-        <button className="text-primary hover:underline">« Back</button>
-        <button className="bg-primary hover:bg-secondary text-white font-bold py-3 px-8 rounded">
-          SAVE
+        <button 
+          onClick={() => navigate('/')}
+          className="text-primary hover:underline"
+        >
+          « Back
+        </button>
+        <button 
+          onClick={handleSave}
+          disabled={loading}
+          className="bg-primary hover:bg-secondary text-white font-bold py-3 px-8 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {loading ? 'SAVING...' : 'SAVE'}
         </button>
       </div>
       <p className="text-primary text-sm mt-4">* Required field</p>
