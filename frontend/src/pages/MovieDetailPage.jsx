@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Icon from '../components/common/Icon';
-
-// API Configuration
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+import { movieService } from '../services/movie.service';
 
 export default function MovieDetailPage() {
   const { slug } = useParams();
@@ -27,22 +25,8 @@ export default function MovieDetailPage() {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`${API_BASE_URL}/api/movies/${slug}`);
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error('Movie not found');
-        }
-        throw new Error('Failed to fetch movie details');
-      }
-
-      const result = await response.json();
-
-      if (result.success && result.data) {
-        setMovie(result.data);
-      } else {
-        throw new Error(result.message || 'Failed to load movie');
-      }
+      const data = await movieService.getMovieBySlug(slug);
+      setMovie(data);
     } catch (err) {
       console.error('Error fetching movie details:', err);
       setError(err.message);
@@ -60,6 +44,27 @@ export default function MovieDetailPage() {
       case 'T18': return 'Movies suitable for audiences aged 18 and above';
       default: return 'Rating description not available';
     }
+  };
+
+  const formatLanguageDisplay = (language, subtitles, dubbing) => {
+    const parts = [];
+    
+    // Add language
+    if (language) {
+      parts.push(language);
+    }
+    
+    // Add subtitle info
+    if (subtitles && subtitles.length > 0) {
+      parts.push(`Subtitle: ${subtitles.join(', ')}`);
+    }
+    
+    // Add dubbing info
+    if (dubbing && dubbing.length > 0) {
+      parts.push(`Dubbing: ${dubbing.join(', ')}`);
+    }
+    
+    return parts.length > 0 ? parts.join(' – ') : 'TBA';
   };
 
   const getRatingColor = (rating) => {
@@ -292,12 +297,22 @@ export default function MovieDetailPage() {
               <h1 className="text-4xl font-bold text-gray-900 mb-6">{movie.name}</h1>
 
               <div className="space-y-4 mb-6">
-                <InfoRow icon="user" label="Director" value={movie.director || 'TBA'} />
-                <InfoRow icon="user" label="Cast" value={movie.cast || 'TBA'} />
-                <InfoRow icon="film" label="Genre" value={movie.genre || 'TBA'} />
+                {movie.director && movie.director.length > 0 && (
+                  <InfoRow icon="user" label="Director" value={movie.director.join(', ')} />
+                )}
+                {movie.cast && movie.cast.length > 0 && (
+                  <InfoRow icon="user" label="Cast" value={movie.cast.join(', ')} />
+                )}
+                {movie.genre && movie.genre.length > 0 && (
+                  <InfoRow icon="film" label="Genre" value={movie.genre.join(', ')} />
+                )}
                 <InfoRow icon="calendar" label="Release date" value={formatDate(movie.releaseDate)} />
                 <InfoRow icon="ticket" label="Duration" value={formatDuration(movie.duration)} />
-                <InfoRow icon="info" label="Language" value={movie.language || 'English – Vietnamese Subtitle'} />
+                <InfoRow 
+                  icon="info" 
+                  label="Language" 
+                  value={formatLanguageDisplay(movie.language, movie.subtitle, movie.dubbing)} 
+                />
 
                 <div className="flex items-start gap-3">
                   <Icon name="star" className="w-5 h-5 text-primary mt-1 flex-shrink-0" />
@@ -316,12 +331,6 @@ export default function MovieDetailPage() {
                 <span className={`${getRatingColor(movie.ageRating)} text-white px-3 py-1 rounded font-bold`}>
                   {movie.ageRating}
                 </span>
-                {/* Use hardcoded formats if API doesn't provide them, to maintain UI look */}
-                {(movie.formats || ['4DX', 'IMAX', 'ScreenX', 'ULTRA 4DX']).map((format, idx) => (
-                  <span key={idx} className="bg-gray-800 text-white px-3 py-1 rounded font-semibold text-sm">
-                    {format}
-                  </span>
-                ))}
                 <button
                   onClick={() => setShowBookingModal(true)}
                   className="ml-auto bg-primary hover:bg-secondary text-white px-8 py-3 rounded-lg font-bold text-lg transition-colors shadow-lg"

@@ -16,6 +16,12 @@ export class MovieResponseDto {
     slug: string;
     description: string | null;
     trailerUrl: string | null;
+    language: string | null;
+    director: string[];
+    cast: string[];
+    genre: string[];
+    subtitle: string[];
+    dubbing: string[];
 }
 
 export class ApiResponseDto<T> {

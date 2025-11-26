@@ -37,7 +37,15 @@ export class MovieService {
     }
 
     /**
-     * Call GetMovies stored procedure and return normalized data
+     * Parse GROUP_CONCAT result into array
+     */
+    private parseGroupConcat(value: string | null): string[] {
+        if (!value) return [];
+        return value.split('|||').filter(item => item && item.trim());
+    }
+
+    /**
+     * Call optimized stored procedure that returns movies with all related data in ONE query
      */
     async getMovies(
         status: string = 'all',
@@ -54,38 +62,44 @@ export class MovieService {
             const safeOffset = Math.max(0, Number(offset) || 0);
 
             this.logger.log(
-                `Calling GetMovies procedure with status=${normalizedStatus}, limit=${safeLimit}, offset=${safeOffset}`,
+                `Calling sp_get_movies_with_details with status=${normalizedStatus}, limit=${safeLimit}, offset=${safeOffset}`,
             );
 
-            // Call stored procedure
+            // Call optimized stored procedure - ONE query instead of N+1
             const rawResults = await this.dataSource.query(
-                'CALL GetMovies(?, ?, ?)',
+                'CALL sp_get_movies_with_details(?, ?, ?)',
                 [normalizedStatus, safeLimit, safeOffset],
             );
 
             // The stored procedure returns results in the first element of the array
             const movies = rawResults[0] || [];
 
-            this.logger.log(`Retrieved ${movies.length} movies from database`);
+            this.logger.log(`Retrieved ${movies.length} movies with all details from database`);
 
-            // Normalize the response
+            // Normalize the response - no additional queries needed!
             const normalizedMovies: MovieResponseDto[] = movies.map((movie: any) => ({
                 id: movie.id,
                 name: movie.name,
                 duration: movie.duration,
+                language: movie.language,
                 releaseDate: this.formatDate(movie.release_date),
                 endDate: this.formatDate(movie.end_date),
                 ageRating: movie.age_rating,
                 posterUrl: movie.poster_url,
                 posterFile: movie.poster_file,
-                slug: movie.slug || this.generateSlug(movie.name),
+                slug: movie.url_slug || this.generateSlug(movie.name),
                 description: movie.description,
                 trailerUrl: movie.trailer_url,
+                director: this.parseGroupConcat(movie.directors),
+                cast: this.parseGroupConcat(movie.actors),
+                genre: this.parseGroupConcat(movie.genres),
+                subtitle: this.parseGroupConcat(movie.subtitles),
+                dubbing: this.parseGroupConcat(movie.dubbing_options),
             }));
 
             return normalizedMovies;
         } catch (error) {
-            this.logger.error('Error calling GetMovies procedure:', error);
+            this.logger.error('Error calling sp_get_movies_with_details:', error);
             throw error;
         }
     }

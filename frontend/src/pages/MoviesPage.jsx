@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '../components/common/Icon';
-
-// API Configuration - Update this to match your backend URL
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+import { movieService } from '../services/movie.service';
 
 function MovieCard({ movie }) {
   const getRatingColor = (rating) => {
@@ -88,11 +86,11 @@ function MovieCard({ movie }) {
           {movie.name}
         </h3>
         <div className="space-y-1 text-sm text-text-sub">
+          {movie.genre && movie.genre.length > 0 && (
+            <p><strong>Genre:</strong> {movie.genre.join(', ')}</p>
+          )}
           <p><strong>Duration:</strong> {formatDuration(movie.duration)}</p>
           <p><strong>Release:</strong> {formatDate(movie.releaseDate)}</p>
-          {movie.description && (
-            <p className="line-clamp-2"><strong>About:</strong> {movie.description}</p>
-          )}
         </div>
       </div>
     </Link>
@@ -113,20 +111,13 @@ export default function MoviesPage() {
       setLoading(true);
       setError(null);
 
-      // Call the backend API with status=now to get currently showing movies
-      const response = await fetch(`${API_BASE_URL}/api/movies?status=now&limit=100&offset=0`);
+      const data = await movieService.getMovies({
+        status: 'now',
+        limit: 100,
+        offset: 0
+      });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      if (result.success && result.data) {
-        setMovies(result.data);
-      } else {
-        throw new Error(result.message || 'Failed to fetch movies');
-      }
+      setMovies(data);
     } catch (err) {
       console.error('Error fetching movies:', err);
       setError(err.message || 'Failed to load movies. Please try again later.');

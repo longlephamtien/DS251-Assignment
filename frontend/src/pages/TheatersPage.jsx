@@ -3,12 +3,38 @@ import Icon from '../components/common/Icon';
 import { theaterService } from '../services/theater.service';
 
 const cities = [
-  'Ho Chi Minh City', 'Ha Noi', 'Quang Ninh', 'Ba Ria - Vung Tau', 'Binh Dinh',
-  'Binh Duong', 'Dak Lak', 'Da Nang', 'Bac Giang', 'Vinh Long',
-  'Hung Yen', 'Khanh Hoa', 'Phu Tho', 'Quang Ngai', 'Thai Nguyen',
-  'Tra Vinh', 'Kien Giang', 'Dong Thap', 'Lang Son', 'Bac Lieu',
-  'Nghe An', 'Son La', 'Tay Ninh', 'Tien Giang', 'Can Tho',
-  'Dong Nai', 'Hai Phong'
+  'Ho Chi Minh City',
+  'Ha Noi',
+  'Da Nang',
+  'Can Tho',
+  'Dong Nai',
+  'Hai Phong',
+  'Quang Ninh',
+  'Ba Ria - Vung Tau',
+  'Binh Dinh',
+  'Binh Duong',
+  'Dak Lak',
+  'Tra Vinh',
+  'Yen Bai',
+  'Vinh Long',
+  'Kien Giang',
+  'Hau Giang',
+  'Ha Tinh',
+  'Phu Yen',
+  'Dong Thap',
+  'Bac Lieu',
+  'Hung Yen',
+  'Khanh Hoa',
+  'Kon Tum',
+  'Lang Son',
+  'Nghe An',
+  'Phu Tho',
+  'Quang Ngai',
+  'Soc Trang',
+  'Son La',
+  'Tay Ninh',
+  'Thai Nguyen',
+  'Tien Giang'
 ];
 
 export default function TheatersPage() {
@@ -133,7 +159,7 @@ export default function TheatersPage() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    for (let i = -1; i <= 28; i++) {
+    for (let i = 0; i <= 28; i++) {
       const date = new Date(today);
       date.setDate(today.getDate() + i);
 

@@ -30,7 +30,7 @@ export class TheaterService {
 
             // Execute the stored procedure
             const result = await this.theaterRepository.query(
-                'CALL GetTheaters(?, ?, ?, ?, ?)',
+                'CALL sp_get_theaters(?, ?, ?, ?, ?)',
                 [name, city, district, limit, offset],
             );
 
@@ -75,7 +75,7 @@ export class TheaterService {
             this.logger.log(`Fetching schedule for theaterId=${theaterId}, date=${date}`);
 
             const result = await this.theaterRepository.query(
-                'CALL GetScheduleByTheater(?, ?)',
+                'CALL sp_get_schedule_by_theater(?, ?)',
                 [theaterId, date],
             );
 
