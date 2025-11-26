@@ -23,11 +23,11 @@ const theatersData = [
 ];
 
 const cities = [
-  'Ho Chi Minh', 'Ha Noi', 'Quang Ninh', 'Ba Ria - Vung Tau', 'Binh Dinh', 
-  'Binh Duong', 'Dak Lak', 'Da Nang', 'Bac Giang', 'Vinh Long', 
-  'Hung Yen', 'Khanh Hoa', 'Phu Tho', 'Quang Ngai', 'Thai Nguyen', 
-  'Tra Vinh', 'Kien Giang', 'Dong Thap', 'Lang Son', 'Bac Lieu', 
-  'Nghe An', 'Son La', 'Tay Ninh', 'Tien Giang', 'Can Tho', 
+  'Ho Chi Minh', 'Ha Noi', 'Quang Ninh', 'Ba Ria - Vung Tau', 'Binh Dinh',
+  'Binh Duong', 'Dak Lak', 'Da Nang', 'Bac Giang', 'Vinh Long',
+  'Hung Yen', 'Khanh Hoa', 'Phu Tho', 'Quang Ngai', 'Thai Nguyen',
+  'Tra Vinh', 'Kien Giang', 'Dong Thap', 'Lang Son', 'Bac Lieu',
+  'Nghe An', 'Son La', 'Tay Ninh', 'Tien Giang', 'Can Tho',
   'Dong Nai', 'Hai Phong'
 ];
 
@@ -36,7 +36,7 @@ export default function TheatersPage() {
   const [selectedTheater, setSelectedTheater] = useState(null);
   const [activeTab, setActiveTab] = useState('schedule');
 
-  const filteredTheaters = selectedCity 
+  const filteredTheaters = selectedCity
     ? theatersData.filter(theater => theater.city === selectedCity)
     : [];
 
@@ -44,14 +44,14 @@ export default function TheatersPage() {
   const generateDates = () => {
     const dates = [];
     const today = new Date();
-    
+
     for (let i = -1; i <= 28; i++) {
       const date = new Date(today);
       date.setDate(today.getDate() + i);
-      
+
       const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
       const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-      
+
       dates.push({
         day: date.getDate(),
         dayName: dayNames[date.getDay()],
@@ -60,7 +60,7 @@ export default function TheatersPage() {
         offset: i
       });
     }
-    
+
     return dates;
   };
 
@@ -87,7 +87,7 @@ export default function TheatersPage() {
             <h1 className="text-2xl md:text-3xl font-bold text-center text-gray-900 mb-6 tracking-wider">
               BKINEMA CINEMAS
             </h1>
-            
+
             {/* Cities Grid */}
             <div className="grid grid-cols-5 gap-x-6 gap-y-3">
               {cities.map((city, idx) => (
@@ -97,11 +97,10 @@ export default function TheatersPage() {
                     setSelectedCity(city);
                     setSelectedTheater(null);
                   }}
-                  className={`text-left py-2 px-3 font-medium transition-colors ${
-                    selectedCity === city
+                  className={`text-left py-2 px-3 font-medium transition-colors ${selectedCity === city
                       ? 'text-primary font-bold bg-indigo-50 rounded'
                       : 'text-gray-700 hover:text-primary hover:bg-gray-100 rounded'
-                  }`}
+                    }`}
                 >
                   {city}
                 </button>
@@ -115,18 +114,17 @@ export default function TheatersPage() {
               <div className="p-8 bg-gray-50">
                 {/* Separator Line */}
                 <div className="border-t-2 border-gray-300 mb-8 mx-2"></div>
-              
+
                 {/* Theater Grid */}
                 <div className="grid grid-cols-4 gap-x-6 gap-y-3">
                   {filteredTheaters.map((theater) => (
                     <button
                       key={theater.id}
                       onClick={() => setSelectedTheater(theater)}
-                      className={`text-left py-2 px-3 font-medium transition-colors ${
-                        selectedTheater?.id === theater.id
+                      className={`text-left py-2 px-3 font-medium transition-colors ${selectedTheater?.id === theater.id
                           ? 'text-primary font-bold bg-indigo-50 rounded'
                           : 'text-gray-700 hover:text-primary hover:bg-gray-100 rounded'
-                      }`}
+                        }`}
                     >
                       {theater.name.replace('BKinema ', '')}
                     </button>
@@ -143,14 +141,14 @@ export default function TheatersPage() {
             </>
           )}
         </div>
-        
+
         {/* Theater Details Section - Outside the border box */}
         {selectedTheater && (
           <div>
             {/* Section Header - Same style as Movie Selection */}
             <div className="relative mb-10">
               <h2 className="text-3xl md:text-5xl font-bold text-center tracking-wider relative inline-block w-full">
-                <span className="relative z-10 bg-background px-6 text-gray-800" style={{ 
+                <span className="relative z-10 bg-background px-6 text-gray-800" style={{
                   textShadow: '2px 2px 0px #e5e5e5, 4px 4px 0px #d4d4d4',
                   letterSpacing: '0.05em'
                 }}>
@@ -170,12 +168,12 @@ export default function TheatersPage() {
               {/* Theater Image Carousel */}
               <div className="bg-white rounded-lg overflow-hidden shadow-lg mb-8">
                 <div className="relative aspect-video bg-gray-900">
-                  <img 
+                  <img
                     src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='450'%3E%3Crect width='800' height='450' fill='%23111827'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='Arial, sans-serif' font-size='20' fill='%23666'%3ETheater Image%3C/text%3E%3C/svg%3E"
                     alt="Theater"
                     className="w-full h-full object-cover"
                   />
-                  
+
                   {/* Navigation Arrows */}
                   <button className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-3 rounded transition-colors">
                     <Icon name="chevron-left" className="w-6 h-6" />
@@ -212,24 +210,22 @@ export default function TheatersPage() {
               {/* Schedule and Ticket Price Tabs */}
               <div className="bg-white rounded-lg overflow-hidden shadow-lg">
                 <div className="flex border-b">
-                  <button 
+                  <button
                     onClick={() => setActiveTab('schedule')}
-                    className={`flex-1 py-3 px-4 font-semibold flex items-center justify-center gap-2 transition-colors ${
-                      activeTab === 'schedule' 
-                        ? 'bg-primary text-white' 
+                    className={`flex-1 py-3 px-4 font-semibold flex items-center justify-center gap-2 transition-colors ${activeTab === 'schedule'
+                        ? 'bg-primary text-white'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                      }`}
                   >
                     <Icon name="calendar" className="w-5 h-5" />
                     <span>Schedule</span>
                   </button>
-                  <button 
+                  <button
                     onClick={() => setActiveTab('price')}
-                    className={`flex-1 py-3 px-4 font-semibold flex items-center justify-center gap-2 transition-colors ${
-                      activeTab === 'price' 
-                        ? 'bg-primary text-white' 
+                    className={`flex-1 py-3 px-4 font-semibold flex items-center justify-center gap-2 transition-colors ${activeTab === 'price'
+                        ? 'bg-primary text-white'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                      }`}
                   >
                     <Icon name="ticket" className="w-5 h-5" />
                     <span>Ticket Price</span>
@@ -258,11 +254,10 @@ export default function TheatersPage() {
                           {dates.map((date, idx) => (
                             <button
                               key={idx}
-                              className={`flex flex-col items-center min-w-[70px] py-2 px-3 rounded transition-colors ${
-                                date.isToday
+                              className={`flex flex-col items-center min-w-[70px] py-2 px-3 rounded transition-colors ${date.isToday
                                   ? 'bg-primary text-white'
                                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                              }`}
+                                }`}
                             >
                               <span className="text-xs font-medium">{date.month}</span>
                               <span className="text-2xl font-bold">{date.day}</span>
@@ -285,7 +280,7 @@ export default function TheatersPage() {
                         {/* Movie 1 - WICKED: FOR GOOD */}
                         <div className="border-b pb-6">
                           <div className="flex gap-6 mb-4">
-                            <img 
+                            <img
                               src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='220'%3E%3Crect width='150' height='220' fill='%2322c55e'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='Arial' font-size='16' fill='white' font-weight='bold'%3EWICKED%3C/text%3E%3C/svg%3E"
                               alt="WICKED: FOR GOOD"
                               className="w-[20%] object-cover rounded shadow-md flex-shrink-0"
@@ -295,7 +290,7 @@ export default function TheatersPage() {
                                 <h3 className="text-xl font-bold text-gray-900">WICKED: FOR GOOD</h3>
                                 <span className="bg-green-500 text-white text-xs px-2 py-1 rounded font-bold">K</span>
                               </div>
-                              
+
                               {/* 4DX2D Vietnam Sub | 4DX Cinema */}
                               <div className="mb-4">
                                 <p className="font-semibold text-gray-800 mb-2">4DX2D Vietnam Sub | 4DX Cinema</p>
@@ -332,7 +327,7 @@ export default function TheatersPage() {
                         {/* Movie 2 - TRUY TÌM LÒNG ĐIỂN HƯƠNG */}
                         <div className="border-b pb-6">
                           <div className="flex gap-6 mb-4">
-                            <img 
+                            <img
                               src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='220'%3E%3Crect width='150' height='220' fill='%23eab308'/%3E%3Ctext x='50%25' y='40%25' dominant-baseline='middle' text-anchor='middle' font-family='Arial' font-size='14' fill='white' font-weight='bold'%3ETRUY TÌM%3C/text%3E%3Ctext x='50%25' y='60%25' dominant-baseline='middle' text-anchor='middle' font-family='Arial' font-size='14' fill='white' font-weight='bold'%3ELÒNG ĐIỂN%3C/text%3E%3C/svg%3E"
                               alt="TRUY TÌM LÒNG ĐIỂN HƯƠNG"
                               className="w-[20%] object-cover rounded shadow-md flex-shrink-0"
@@ -342,7 +337,7 @@ export default function TheatersPage() {
                                 <h3 className="text-xl font-bold text-gray-900">TRUY TÌM LÒNG ĐIỂN HƯƠNG</h3>
                                 <span className="bg-yellow-500 text-white text-xs px-2 py-1 rounded font-bold">T16</span>
                               </div>
-                              
+
                               {/* 2D English Sub */}
                               <div className="mb-4">
                                 <p className="font-semibold text-gray-800 mb-2">2D English Sub</p>

@@ -1,58 +1,66 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Icon from '../components/common/Icon';
 
-// This would typically come from an API or database
-const movieDetailsData = {
-  'wicked-for-good': {
-    id: 1,
-    title: 'Wicked: For Good',
-    poster: 'wicked-for-good.jpg',
-    director: 'Jon M. Chu',
-    cast: 'Cynthia Erivo, Ariana Grande, Jonathan Bailey, Ethan Slater, Bowen Yang, Marissa Bode, with Michelle Yeoh and Jeff Goldblum',
-    genre: 'Fantasy, Musicals',
-    releaseDate: 'Nov 21, 2025',
-    duration: '138 minutes',
-    language: 'English – Vietnamese Subtitle',
-    rating: 'K',
-    ratingDescription: 'Movies are disseminated to viewers under the age of 13 provided they are watched with a parents or guardian',
-    formats: ['4DX', 'IMAX', 'ScreenX', 'ULTRA 4DX'],
-    description: "Last year's global cinematic cultural sensation, which became the most successful Broadway film adaptation of all time, now reaches its epic, electrifying, emotional conclusion in Wicked: For Good. The final chapter begins with Elphaba and Glinda estranged and living with the consequences of their choices. Elphaba, now demonized as The Wicked Witch of the West. Glinda, meanwhile, has become the glamorous symbol of Goodness for all of Oz. When a girl from Kansas appears, their lives are turned upside down. Glinda and Elphaba must come together one final time, they will need to truly see each other, with honesty and empathy, if they hope to change themselves and all of Oz. Can Elphaba and Glinda defy destiny to reshape the fate of Oz?",
-    trailerUrl: 'https://www.youtube.com/embed/6COmYeLsz4c'
-  },
-  'the-first-ride': {
-    id: 2,
-    title: 'The First Ride',
-    poster: 'the-first-ride.jpg',
-    director: 'TBD',
-    cast: 'TBD',
-    genre: 'Comedy',
-    releaseDate: 'Nov 21, 2025',
-    duration: '110 minutes',
-    language: 'English – Vietnamese Subtitle',
-    rating: 'T13',
-    ratingDescription: 'Movies suitable for audiences aged 13 and above',
-    formats: [],
-    description: 'A hilarious comedy about the first ride experience...',
-    trailerUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ'
-  }
-};
+// API Configuration
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
 export default function MovieDetailPage() {
   const { slug } = useParams();
-  const movie = movieDetailsData[slug];
+  const navigate = useNavigate();
+  const [movie, setMovie] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [showBookingModal, setShowBookingModal] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
-  if (!movie) {
-    return (
-      <div className="bg-background min-h-screen py-12">
-        <div className="max-w-[1200px] mx-auto px-4 text-center">
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">Movie Not Found</h1>
-          <p className="text-gray-600">The movie you're looking for doesn't exist.</p>
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    setImageError(false);
+  }, [movie]);
+
+  useEffect(() => {
+    fetchMovieDetail();
+  }, [slug]);
+
+  const fetchMovieDetail = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await fetch(`${API_BASE_URL}/api/movies/${slug}`);
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('Movie not found');
+        }
+        throw new Error('Failed to fetch movie details');
+      }
+
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        setMovie(result.data);
+      } else {
+        throw new Error(result.message || 'Failed to load movie');
+      }
+    } catch (err) {
+      console.error('Error fetching movie details:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getRatingDescription = (rating) => {
+    switch (rating) {
+      case 'P': return 'Movies suitable for all ages';
+      case 'K': return 'Movies are disseminated to viewers under the age of 13 provided they are watched with a parents or guardian';
+      case 'T13': return 'Movies suitable for audiences aged 13 and above';
+      case 'T16': return 'Movies suitable for audiences aged 16 and above';
+      case 'T18': return 'Movies suitable for audiences aged 18 and above';
+      default: return 'Rating description not available';
+    }
+  };
 
   const getRatingColor = (rating) => {
     switch (rating) {
@@ -65,24 +73,38 @@ export default function MovieDetailPage() {
     }
   };
 
+  // Helper to get embed URL for YouTube
+  const getEmbedUrl = (url) => {
+    if (!url) return null;
+    // Handle standard watch URLs
+    if (url.includes('watch?v=')) {
+      return url.replace('watch?v=', 'embed/');
+    }
+    // Handle short URLs (youtu.be)
+    if (url.includes('youtu.be/')) {
+      return url.replace('youtu.be/', 'youtube.com/embed/');
+    }
+    return url;
+  };
+
   // Generate dates (today + 28 days)
   const generateDates = () => {
     const dates = [];
     const today = new Date();
-    
+
     for (let i = 0; i <= 28; i++) {
       const date = new Date(today);
       date.setDate(today.getDate() + i);
-      
+
       const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
       const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-      
+
       // Format date as YYYY-MM-DD in local timezone
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const day = String(date.getDate()).padStart(2, '0');
       const fullDate = `${year}-${month}-${day}`;
-      
+
       dates.push({
         day: date.getDate(),
         dayName: dayNames[date.getDay()],
@@ -90,7 +112,7 @@ export default function MovieDetailPage() {
         fullDate: fullDate
       });
     }
-    
+
     return dates;
   };
 
@@ -174,6 +196,70 @@ export default function MovieDetailPage() {
     }
   ];
 
+  // Helper to format date
+  const formatDate = (dateString) => {
+    if (!dateString) return 'TBA';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  // Helper to format duration
+  const formatDuration = (duration) => {
+    return `${duration} minutes`;
+  };
+
+  // Get poster image path
+  const getPosterImage = () => {
+    if (movie?.posterFile) {
+      try {
+        return require(`../assets/media/movies/${movie.posterFile}`);
+      } catch (error) {
+        console.warn(`Poster file not found: ${movie.posterFile}`);
+        return null;
+      }
+    }
+    return movie?.posterUrl || null;
+  };
+
+  if (loading) {
+    return (
+      <div className="bg-background min-h-screen py-12 flex justify-center items-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          <p className="text-text-sub text-lg mt-4">Loading movie details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !movie) {
+    return (
+      <div className="bg-background min-h-screen py-12">
+        <div className="max-w-[1200px] mx-auto px-4 text-center">
+          <Icon name="alert-circle" className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">
+            {error || 'Movie Not Found'}
+          </h1>
+          <p className="text-gray-600 mb-8">
+            {error ? 'There was a problem loading the movie details.' : "The movie you're looking for doesn't exist."}
+          </p>
+          <button
+            onClick={() => navigate('/movies')}
+            className="bg-primary hover:bg-secondary text-white px-6 py-2 rounded-lg font-semibold transition-colors"
+          >
+            Back to Movies
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const posterImage = getPosterImage();
+
   return (
     <div className="bg-background min-h-screen">
       {/* Movie Details Section */}
@@ -182,33 +268,44 @@ export default function MovieDetailPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {/* Movie Poster */}
             <div className="md:col-span-1">
-              <div className="relative aspect-[2/3] bg-gradient-to-br from-gray-800 via-gray-700 to-gray-900 rounded-lg shadow-lg overflow-hidden">
-                <div className="absolute inset-0 flex items-center justify-center text-white p-6">
-                  <div className="text-center">
-                    <h3 className="text-2xl font-bold mb-3">{movie.title}</h3>
-                    <p className="text-gray-300">{movie.genre}</p>
+              <div className={`relative rounded-lg shadow-lg overflow-hidden ${!posterImage || imageError ? 'aspect-[2/3] bg-gradient-to-br from-gray-800 via-gray-700 to-gray-900' : ''}`}>
+                {posterImage && !imageError ? (
+                  <img
+                    src={posterImage}
+                    alt={movie.name}
+                    className="w-full h-auto block"
+                    onError={() => setImageError(true)}
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center text-white p-6">
+                    <div className="text-center">
+                      <h3 className="text-2xl font-bold mb-3">{movie.name}</h3>
+                      <p className="text-gray-300">Movie Poster</p>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
 
             {/* Movie Information */}
             <div className="md:col-span-2">
-              <h1 className="text-4xl font-bold text-gray-900 mb-6">{movie.title}</h1>
-              
+              <h1 className="text-4xl font-bold text-gray-900 mb-6">{movie.name}</h1>
+
               <div className="space-y-4 mb-6">
-                <InfoRow icon="user" label="Director" value={movie.director} />
-                <InfoRow icon="user" label="Cast" value={movie.cast} />
-                <InfoRow icon="film" label="Genre" value={movie.genre} />
-                <InfoRow icon="calendar" label="Release date" value={movie.releaseDate} />
-                <InfoRow icon="ticket" label="Duration" value={movie.duration} />
-                <InfoRow icon="info" label="Language" value={movie.language} />
-                
+                <InfoRow icon="user" label="Director" value={movie.director || 'TBA'} />
+                <InfoRow icon="user" label="Cast" value={movie.cast || 'TBA'} />
+                <InfoRow icon="film" label="Genre" value={movie.genre || 'TBA'} />
+                <InfoRow icon="calendar" label="Release date" value={formatDate(movie.releaseDate)} />
+                <InfoRow icon="ticket" label="Duration" value={formatDuration(movie.duration)} />
+                <InfoRow icon="info" label="Language" value={movie.language || 'English – Vietnamese Subtitle'} />
+
                 <div className="flex items-start gap-3">
                   <Icon name="star" className="w-5 h-5 text-primary mt-1 flex-shrink-0" />
                   <div>
                     <span className="font-semibold text-gray-900">Rated:</span>
-                    <span className="ml-2 text-gray-700">{movie.rating} - {movie.ratingDescription}</span>
+                    <span className="ml-2 text-gray-700">
+                      {movie.ageRating} - {getRatingDescription(movie.ageRating)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -216,10 +313,11 @@ export default function MovieDetailPage() {
               {/* Format Badges and Booking Button */}
               <div className="flex flex-wrap items-center gap-3 mb-6">
                 <span className="font-semibold text-gray-900">Rated:</span>
-                <span className={`${getRatingColor(movie.rating)} text-white px-3 py-1 rounded font-bold`}>
-                  {movie.rating}
+                <span className={`${getRatingColor(movie.ageRating)} text-white px-3 py-1 rounded font-bold`}>
+                  {movie.ageRating}
                 </span>
-                {movie.formats.map((format, idx) => (
+                {/* Use hardcoded formats if API doesn't provide them, to maintain UI look */}
+                {(movie.formats || ['4DX', 'IMAX', 'ScreenX', 'ULTRA 4DX']).map((format, idx) => (
                   <span key={idx} className="bg-gray-800 text-white px-3 py-1 rounded font-semibold text-sm">
                     {format}
                   </span>
@@ -243,23 +341,25 @@ export default function MovieDetailPage() {
       </div>
 
       {/* Trailer Section */}
-      <div className="bg-gray-100 py-12">
-        <div className="max-w-[1200px] mx-auto px-4">
-          <h2 className="text-3xl font-bold text-gray-900 mb-6">Trailer</h2>
-          <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden shadow-lg">
-            <iframe
-              width="100%"
-              height="100%"
-              src={movie.trailerUrl}
-              title={`${movie.title} Trailer`}
-              frameBorder="0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-              className="w-full h-full"
-            ></iframe>
+      {movie.trailerUrl && (
+        <div className="bg-gray-100 py-12">
+          <div className="max-w-[1200px] mx-auto px-4">
+            <h2 className="text-3xl font-bold text-gray-900 mb-6">Trailer</h2>
+            <div className="aspect-video bg-gray-900 rounded-lg overflow-hidden shadow-lg">
+              <iframe
+                width="100%"
+                height="100%"
+                src={getEmbedUrl(movie.trailerUrl)}
+                title={`${movie.name} Trailer`}
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                className="w-full h-full"
+              ></iframe>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Booking Modal */}
       {showBookingModal && (
@@ -322,11 +422,10 @@ function BookingModal({ movie, dates, theaterShowtimes, onClose }) {
                 <button
                   key={idx}
                   onClick={() => setSelectedDate(date.fullDate)}
-                  className={`flex flex-col items-center min-w-[70px] py-2 px-2 transition-colors border-2 ${
-                    selectedDate === date.fullDate
-                      ? 'bg-white text-gray-900 border-gray-900'
-                      : 'text-gray-600 border-gray-300 hover:bg-white/50'
-                  }`}
+                  className={`flex flex-col items-center min-w-[70px] py-2 px-2 transition-colors border-2 ${selectedDate === date.fullDate
+                    ? 'bg-white text-gray-900 border-gray-900'
+                    : 'text-gray-600 border-gray-300 hover:bg-white/50'
+                    }`}
                 >
                   <span className="text-[10px] font-medium">{date.month}</span>
                   <span className="text-2xl font-bold leading-tight">{date.day}</span>
@@ -344,11 +443,10 @@ function BookingModal({ movie, dates, theaterShowtimes, onClose }) {
                 <button
                   key={city}
                   onClick={() => setSelectedCity(city)}
-                  className={`px-4 py-2 text-sm font-medium transition-colors ${
-                    selectedCity === city
-                      ? 'bg-gray-900 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                  className={`px-4 py-2 text-sm font-medium transition-colors ${selectedCity === city
+                    ? 'bg-gray-900 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
                 >
                   {city}
                 </button>
@@ -363,11 +461,10 @@ function BookingModal({ movie, dates, theaterShowtimes, onClose }) {
                 <button
                   key={format}
                   onClick={() => setSelectedFormat(format)}
-                  className={`px-4 py-2 text-sm font-medium transition-colors ${
-                    selectedFormat === format
-                      ? 'bg-gray-900 text-white'
-                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
-                  }`}
+                  className={`px-4 py-2 text-sm font-medium transition-colors ${selectedFormat === format
+                    ? 'bg-gray-900 text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+                    }`}
                 >
                   {format}
                 </button>
@@ -381,7 +478,7 @@ function BookingModal({ movie, dates, theaterShowtimes, onClose }) {
               {theaterShowtimes.map((theater, idx) => (
                 <div key={idx} className="border-b pb-6 last:border-b-0">
                   <h3 className="text-lg font-bold text-gray-900 mb-1">{theater.theater}</h3>
-                  
+
                   {theater.formats.map((format, fIdx) => (
                     <div key={fIdx} className="mt-4">
                       <p className="text-sm font-semibold text-gray-800 mb-3">{format.name}</p>
