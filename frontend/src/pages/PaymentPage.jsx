@@ -14,11 +14,11 @@ export default function PaymentPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { bookingData } = useBooking();
-  
+
   // Get booking data from location state or context
-  const { 
-    selectedSeats = bookingData.selectedSeats || [], 
-    bookingInfo = bookingData.bookingInfo || {}, 
+  const {
+    selectedSeats = bookingData.selectedSeats || [],
+    bookingInfo = bookingData.bookingInfo || {},
     seatTotal = bookingData.seatTotal || 0,
     seatsByType = bookingData.seatsByType || {},
     comboTotal = bookingData.comboTotal || 0,
@@ -31,6 +31,9 @@ export default function PaymentPage() {
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [countdown, setCountdown] = useState(300); // 5 minutes in seconds
   const [expandedSection, setExpandedSection] = useState(null);
+
+
+  console.log("Booking Data:", bookingData);
 
   const toggleSection = (sectionId) => {
     setExpandedSection(expandedSection === sectionId ? null : sectionId);
@@ -110,8 +113,8 @@ export default function PaymentPage() {
                   <h3 className="font-bold text-gray-900">
                     <span className="text-gray-600">Step 1: </span>METHOD OF DISCOUNT
                   </h3>
-                  <button 
-                    onClick={() => {/* Reset logic */}}
+                  <button
+                    onClick={() => {/* Reset logic */ }}
                     className="flex items-center gap-1 text-sm text-gray-700 hover:text-gray-900"
                   >
                     <Icon name="refresh" className="w-4 h-4" />

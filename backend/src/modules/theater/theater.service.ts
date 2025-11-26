@@ -78,7 +78,6 @@ export class TheaterService {
                 'CALL sp_get_schedule_by_theater(?, ?)',
                 [theaterId, date],
             );
-
             let schedule: any[] = [];
             if (Array.isArray(result) && Array.isArray(result[0])) {
                 schedule = result[0];
