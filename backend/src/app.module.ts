@@ -7,6 +7,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { HealthController } from './health/health.controller';
+import { AuthModule } from './modules/auth/auth.module';
+import { User } from './modules/user/entities/user.entity';
+import { Customer } from './modules/user/entities/customer.entity';
+import { Staff } from './modules/user/entities/staff.entity';
+import { Membership } from './modules/membership/entities/membership.entity';
 
 @Module({
   imports: [
@@ -37,12 +42,15 @@ import { HealthController } from './health/health.controller';
           username: db?.username,
           password: db?.password,
           database: db?.database,
-          entities: [],
+          entities: [User, Customer, Staff, Membership],
           synchronize: false,
+          charset: 'utf8mb4',
+          collation: 'utf8mb4_unicode_ci',
           extra: ssl ? { ssl } : {},
         };
       },
     }),
+    AuthModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],
