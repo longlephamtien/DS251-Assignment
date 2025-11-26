@@ -49,11 +49,13 @@ function App() {
               <Route path="/gift-cards" element={<GiftCardPage />} />
               <Route path="/customer" element={<CustomerPage />} />
               <Route path="/my-account" element={<CustomerPage />} />
+              <Route path="/customer" element={<CustomerPage />} />
+              <Route path="/my-account" element={<CustomerPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
             </Routes>
           </main>
-
+          
           <Footer />
         </div>
       </BookingProvider>

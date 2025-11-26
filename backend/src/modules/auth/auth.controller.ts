@@ -5,6 +5,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -68,7 +69,8 @@ export class AuthController {
     @CurrentUser('userId') userId: number,
     @Body() updateProfileDto: UpdateProfileDto,
   ) {
-    return this.authService.updateProfile(userId, updateProfileDto);
+    const { currentPassword, ...profileData } = updateProfileDto;
+    return this.authService.updateProfile(userId, profileData, currentPassword);
   }
 
   @Get('me')
@@ -82,5 +84,39 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Unauthorized - invalid or missing token' })
   async getCurrentUser(@CurrentUser() user: any) {
     return user;
+  }
+
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Change user password' })
+  @ApiResponse({
+    status: 200,
+    description: 'Password successfully changed',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized or incorrect current password' })
+  @ApiResponse({ status: 400, description: 'Bad request - validation error' })
+  async changePassword(
+    @CurrentUser('userId') userId: number,
+    @Body() changePasswordDto: ChangePasswordDto,
+  ) {
+    return this.authService.changePassword(userId, changePasswordDto);
+  }
+
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Logout user' })
+  @ApiResponse({
+    status: 200,
+    description: 'User successfully logged out',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized - invalid or missing token' })
+  async logout() {
+    // Since we're using JWT (stateless), logout is handled client-side
+    // This endpoint exists for consistency and can be extended for token blacklisting if needed
+    return { message: 'Logged out successfully' };
   }
 }

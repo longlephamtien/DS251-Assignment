@@ -305,27 +305,21 @@ BEGIN
         SET p_success = FALSE;
         SET p_message = 'User not found';
     ELSE
-        -- Validate age if birthday is provided
-        SET v_age_valid = fn_validate_age(p_birthday);
-        IF NOT v_age_valid THEN
-            SET p_success = FALSE;
-            SET p_message = 'User must be at least 13 years old';
-        ELSE
-            -- Update user profile
-            UPDATE `User`
-            SET 
-                fname = p_fname,
-                minit = p_minit,
-                lname = p_lname,
-                birthday = p_birthday,
-                gender = p_gender,
-                district = p_district,
-                city = p_city
-            WHERE id = p_user_id;
-            
-            SET p_success = TRUE;
-            SET p_message = 'Profile updated successfully';
-        END IF;
+        -- Update user profile (only update non-null values, birthday is never updated)
+        UPDATE `User`
+        SET 
+            fname = COALESCE(p_fname, fname),
+            minit = COALESCE(p_minit, minit),
+            lname = COALESCE(p_lname, lname),
+            -- birthday is intentionally excluded - it cannot be changed after registration
+            gender = COALESCE(p_gender, gender),
+            district = COALESCE(p_district, district),
+            city = COALESCE(p_city, city),
+            updated_at = NOW()
+        WHERE id = p_user_id;
+        
+        SET p_success = TRUE;
+        SET p_message = 'Profile updated successfully';
     END IF;
 END$$
 
@@ -423,3 +417,82 @@ ORDER BY TRIGGER_NAME;
 --   1. trg_after_user_insert       - Auto-create customer record
 --   2. trg_before_customer_update  - Auto-update membership tier
 -- ============================================
+
+-- Change Password Stored Procedure
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS sp_change_password$$
+
+CREATE PROCEDURE sp_change_password(
+    IN p_user_id BIGINT,
+    IN p_new_password VARCHAR(255),
+    OUT p_success TINYINT,
+    OUT p_message VARCHAR(255)
+)
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        SET p_success = 0;
+        SET p_message = 'Error changing password';
+        ROLLBACK;
+    END;
+
+    START TRANSACTION;
+
+    -- Check if user exists
+    IF NOT EXISTS (SELECT 1 FROM User WHERE id = p_user_id) THEN
+        SET p_success = 0;
+        SET p_message = 'User not found';
+        ROLLBACK;
+    ELSE
+        -- Update password
+        UPDATE User 
+        SET password = p_new_password,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = p_user_id;
+
+        SET p_success = 1;
+        SET p_message = 'Password changed successfully';
+        COMMIT;
+    END IF;
+END$$
+
+DELIMITER ;
+
+-- Get User Password Stored Procedure
+-- Get User Password Stored Procedure
+-- This procedure retrieves a user's password hash for verification
+
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS sp_get_user_password$$
+
+CREATE PROCEDURE sp_get_user_password(
+    IN p_user_id BIGINT,
+    OUT p_password VARCHAR(255),
+    OUT p_success TINYINT,
+    OUT p_message VARCHAR(255)
+)
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        SET p_success = 0;
+        SET p_message = 'Error retrieving user password';
+    END;
+
+    -- Get user password
+    SELECT password INTO p_password
+    FROM User
+    WHERE id = p_user_id
+    LIMIT 1;
+
+    IF p_password IS NULL THEN
+        SET p_success = 0;
+        SET p_message = 'User not found';
+    ELSE
+        SET p_success = 1;
+        SET p_message = 'Password retrieved successfully';
+    END IF;
+END$$
+
+DELIMITER ;

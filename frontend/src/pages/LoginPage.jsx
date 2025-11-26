@@ -2,13 +2,16 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Button from '../components/common/Button';
 import Icon from '../components/common/Icon';
-
+import Notification from '../components/common/Notification';
+import { authService } from '../services';
 const LoginPage = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('login');
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [notification, setNotification] = useState({ isOpen: false, title: '', message: '', type: 'info' });
   const [formData, setFormData] = useState({
-    emailOrPhone: '',
+    email: '',
     password: '',
     captcha: ''
   });
@@ -24,25 +27,47 @@ const LoginPage = () => {
     }));
   };
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     
     // Validate form
-    if (!formData.emailOrPhone || !formData.password || !formData.captcha) {
-      alert('Please fill in all fields');
+    if (!formData.email || !formData.password || !formData.captcha) {
+      setNotification({
+        isOpen: true,
+        title: 'Validation Error',
+        message: 'Please fill in all fields',
+        type: 'error'
+      });
       return;
     }
 
     if (formData.captcha !== captchaText) {
-      alert('Incorrect captcha');
+      setNotification({
+        isOpen: true,
+        title: 'Validation Error',
+        message: 'Incorrect captcha',
+        type: 'error'
+      });
       return;
     }
 
-    // TODO: Implement actual login logic
-    console.log('Login attempt:', formData);
-    
-    // Navigate to customer page on successful login
-    navigate('/');
+    try {
+      setLoading(true);
+      await authService.login(formData.email, formData.password);
+      
+      // Force page reload to update Header state after successful login
+      window.location.href = '/';
+    } catch (err) {
+      console.error('Login error:', err);
+      setNotification({
+        isOpen: true,
+        title: 'Login Failed',
+        message: err.message || 'Login failed. Please check your credentials.',
+        type: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleRegisterClick = () => {
@@ -52,6 +77,14 @@ const LoginPage = () => {
 
   return (
     <div className="min-h-screen bg-background py-8">
+      <Notification
+        isOpen={notification.isOpen}
+        onClose={() => setNotification({ ...notification, isOpen: false })}
+        title={notification.title}
+        message={notification.message}
+        type={notification.type}
+      />
+      
       <div className="container mx-auto px-4">
         <div className="max-w-2xl mx-auto">
           {/* Login Form */}
@@ -82,17 +115,17 @@ const LoginPage = () => {
 
               {/* Login Form */}
               <form onSubmit={handleLogin} className="space-y-6">
-                {/* Email or Phone */}
+                {/* Email */}
                 <div>
                   <label className="block text-sm font-bold text-gray-900 mb-2">
-                    Email or phone number
+                    Email
                   </label>
                   <input
-                    type="text"
-                    name="emailOrPhone"
-                    value={formData.emailOrPhone}
+                    type="email"
+                    name="email"
+                    value={formData.email}
                     onChange={handleInputChange}
-                    placeholder="Email or phone number"
+                    placeholder="Email"
                     className="w-full px-4 py-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                   />
                 </div>
@@ -156,20 +189,11 @@ const LoginPage = () => {
                 {/* Submit Button */}
                 <Button
                   type="submit"
-                  className="w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 text-lg"
+                  disabled={loading}
+                  className="w-full bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  LOGIN
+                  {loading ? 'LOGGING IN...' : 'LOGIN'}
                 </Button>
-
-                {/* Forgot Password Link */}
-                <div className="text-center">
-                  <Link
-                    to="/forgot-password"
-                    className="text-primary hover:text-secondary text-sm"
-                  >
-                    Forgot Your Password?
-                  </Link>
-                </div>
               </form>
             </div>
         </div>
