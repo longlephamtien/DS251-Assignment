@@ -27,6 +27,7 @@ export default function MovieDetailPage() {
       setError(null);
 
       const data = await movieService.getMovieBySlug(slug);
+      console.log("movie", data);
       setMovie(data);
     } catch (err) {
       console.error('Error fetching movie details:', err);
@@ -356,7 +357,13 @@ function BookingModal({ movie, dates, onClose }) {
       for (const theater of theaters) {
         try {
           const schedule = await theaterService.getSchedule(theater.id, selectedDate);
-          schedules[theater.id] = schedule;
+
+          // Filter schedule to only include showtimes for the current movie
+          const filteredSchedule = schedule ? schedule.filter(showtime =>
+            String(showtime.movie_id) === String(movie.id)
+          ) : [];
+
+          schedules[theater.id] = filteredSchedule;
         } catch (err) {
           console.error(`Error fetching schedule for theater ${theater.id}:`, err);
           schedules[theater.id] = null;
@@ -366,7 +373,7 @@ function BookingModal({ movie, dates, onClose }) {
     };
 
     fetchSchedules();
-  }, [theaters, selectedDate]);
+  }, [theaters, selectedDate, movie]);
 
   const handleShowtimeClick = (theaterId, showtimeId) => {
     const formattedDate = selectedDate.replace(/-/g, '');
