@@ -7,9 +7,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { HealthController } from './health/health.controller';
+import { MovieModule } from './modules/movie/movie.module';
 
 @Module({
   imports: [
+    MovieModule,
     ConfigModule.forRoot({
       isGlobal: true,
       load: [appConfig, databaseConfig, jwtConfig],
@@ -47,4 +49,4 @@ import { HealthController } from './health/health.controller';
   controllers: [AppController, HealthController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }
