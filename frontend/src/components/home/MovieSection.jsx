@@ -18,7 +18,6 @@ export default function MovieSection() {
     fetchMovies();
   }, []);
 
-  // Update scroll position and max scroll
   useEffect(() => {
     const handleScroll = () => {
       if (scrollRef.current) {
@@ -30,7 +29,6 @@ export default function MovieSection() {
     const scrollElement = scrollRef.current;
     if (scrollElement) {
       scrollElement.addEventListener('scroll', handleScroll);
-      // Initial calculation
       handleScroll();
     }
 
@@ -62,18 +60,12 @@ export default function MovieSection() {
   };
 
   const scroll = (direction) => {
-    if (scrollRef.current) {
-      // Scroll by 1 movie at a time
-      // Each movie card is 280px (w-[280px]) + 24px gap
-      const cardWidth = 280;
-      const gap = 24;
-      const scrollAmount = cardWidth + gap;
-      
-      scrollRef.current.scrollBy({
-        left: direction === 'left' ? -scrollAmount : scrollAmount,
-        behavior: 'smooth'
-      });
-    }
+    if (!scrollRef.current) return;
+    const card = 270 + 24; // width + gap
+    scrollRef.current.scrollBy({
+      left: direction === 'left' ? -card : card,
+      behavior: 'smooth'
+    });
   };
 
   const getRatingColor = (rating) => {
@@ -123,7 +115,7 @@ export default function MovieSection() {
 
   return (
     <div className="bg-white py-12">
-      <div className="max-w-[1200px] mx-auto px-4">
+      <div className="max-w-[1188px] mx-auto px-4">
         {/* Section Header */}
         <div className="relative mb-8">
           <h2 className="text-3xl md:text-5xl font-bold text-center tracking-wider relative inline-block w-full">
@@ -166,7 +158,14 @@ export default function MovieSection() {
             {!isAtStart && (
               <button
                 onClick={() => scroll('left')}
-                className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 bg-white/90 hover:bg-white p-3 rounded-full shadow-lg z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute -left-5 bg-white/90 hover:bg-white h-24 w-12 shadow-lg z-10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                style={{
+                  top: 'calc((268px * 3/2 - 96px) / 2)',
+                  borderTopRightRadius: '9999px',
+                  borderBottomRightRadius: '9999px',
+                  borderTopLeftRadius: '0',
+                  borderBottomLeftRadius: '0'
+                }}
                 aria-label="Scroll left"
               >
                 <Icon name="chevron-left" className="w-6 h-6 text-gray-800" />
@@ -177,7 +176,14 @@ export default function MovieSection() {
             {!isAtEnd && (
               <button
                 onClick={() => scroll('right')}
-                className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 bg-white/90 hover:bg-white p-3 rounded-full shadow-lg z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute -right-5 bg-white/90 hover:bg-white h-24 w-12 shadow-lg z-10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                style={{
+                  top: 'calc((268px * 3/2 - 96px) / 2)',
+                  borderTopLeftRadius: '9999px',
+                  borderBottomLeftRadius: '9999px',
+                  borderTopRightRadius: '0',
+                  borderBottomRightRadius: '0'
+                }}
                 aria-label="Scroll right"
               >
                 <Icon name="chevron-right" className="w-6 h-6 text-gray-800" />
@@ -187,16 +193,16 @@ export default function MovieSection() {
             {/* Movies Container */}
             <div
               ref={scrollRef}
-              className="flex gap-6 overflow-x-auto scrollbar-hide scroll-smooth pb-4"
-              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              className="flex gap-6 overflow-x-auto scrollbar-hide scroll-smooth snap-x snap-mandatory pb-4 px-4"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', scrollPaddingInline: '16px' }}
             >
-              {movies.map((movie) => {
+              {movies.map((movie, index) => {
                 const posterImage = getPosterImage(movie);
                 
                 return (
                   <div
                     key={movie.id}
-                    className="flex-shrink-0 w-[280px] group/card cursor-pointer"
+                    className="flex-shrink-0 w-[270px] snap-start group/card cursor-pointer"
                     onClick={(e) => handleViewDetails(e, movie)}
                   >
                     <div className="relative aspect-[2/3] rounded-lg overflow-hidden shadow-lg group-hover/card:shadow-2xl transition-shadow">
