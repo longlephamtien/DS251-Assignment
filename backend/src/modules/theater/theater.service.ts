@@ -66,4 +66,33 @@ export class TheaterService {
             throw error;
         }
     }
+
+    /**
+     * Get schedule by theater and date
+     */
+    async getSchedule(theaterId: number, date: string): Promise<any[]> {
+        try {
+            this.logger.log(`Fetching schedule for theaterId=${theaterId}, date=${date}`);
+
+            const result = await this.theaterRepository.query(
+                'CALL GetScheduleByTheater(?, ?)',
+                [theaterId, date],
+            );
+
+            let schedule: any[] = [];
+            if (Array.isArray(result) && Array.isArray(result[0])) {
+                schedule = result[0];
+            } else if (Array.isArray(result)) {
+                schedule = result;
+            }
+
+            // Filter out OkPacket
+            schedule = schedule.filter(item => item && typeof item === 'object' && !('fieldCount' in item));
+
+            return schedule;
+        } catch (error) {
+            this.logger.error('Error fetching schedule:', error);
+            throw error;
+        }
+    }
 }

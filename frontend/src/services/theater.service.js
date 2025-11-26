@@ -22,5 +22,21 @@ export const theaterService = {
         } else {
             throw new Error(result.message || 'Failed to fetch theaters');
         }
+    },
+
+    async getSchedule(theaterId, date) {
+        const response = await fetch(`${API_BASE_URL}/api/theaters/${theaterId}/schedule?date=${date}`);
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+            return result.data;
+        } else {
+            throw new Error(result.message || 'Failed to fetch schedule');
+        }
     }
 };
