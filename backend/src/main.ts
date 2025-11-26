@@ -5,11 +5,7 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-
-  // Enable CORS
   app.enableCors();
-
-  // Enable global validation pipe
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -21,13 +17,8 @@ async function bootstrap() {
   // Swagger configuration
   const config = new DocumentBuilder()
     .setTitle('BKinema API')
-    .setDescription('Cinema booking system API with database-driven authentication')
+    .setDescription('Cinema booking system API')
     .setVersion('1.0')
-    .addTag('Authentication', 'User authentication and profile management')
-    .addTag('Movies', 'Movie management endpoints')
-    .addTag('Theaters', 'Theater and auditorium management')
-    .addTag('Bookings', 'Booking and ticket management')
-    .addTag('Payments', 'Payment processing')
     .addBearerAuth(
       {
         type: 'http',
@@ -50,10 +41,10 @@ async function bootstrap() {
     },
   });
 
-  const port = process.env.PORT ?? 3000;
+  const port = process.env.PORT ?? 8000;
   await app.listen(port);
   
-  console.log(`🚀 Application is running on: http://localhost:${port}`);
-  console.log(`📚 Swagger documentation: http://localhost:${port}/api`);
+  console.log(`Application is running on: http://localhost:${port}`);
+  console.log(`Swagger documentation: http://localhost:${port}/api`);
 }
 bootstrap();
