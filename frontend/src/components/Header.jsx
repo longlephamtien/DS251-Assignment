@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { authService } from '../services';
 import Button from './common/Button';
 import Icon from './common/Icon';
 import logoLarge from '../assets/bkinema-logo-large.png';
@@ -7,6 +8,14 @@ import logoSmall from '../assets/bkinema-logo-small.png';
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const isAuthenticated = authService.isAuthenticated();
+  const accountUrl = isAuthenticated ? '/customer' : '/login';
+  const currentUser = authService.getCurrentUser();
+
+  const handleLogout = async () => {
+    await authService.logout();
+    window.location.href = '/';
+  };
 
   return (
     <>
@@ -22,10 +31,28 @@ export default function Header() {
               <span className="text-gray-500">|</span>
               <button className="opacity-80 hover:text-white transition-colors">VN</button>
             </div>
-            <a href="/login" className="hover:text-white transition-colors border-l border-gray-600 pl-4 flex items-center">
-              <Icon name="user" className="inline-block w-4 h-4" />
-              <span className="ml-1 hidden md:inline">Account</span>
-            </a>
+            {isAuthenticated ? (
+              <>
+                <a href={accountUrl} className="hover:text-white transition-colors border-l border-gray-600 pl-4 flex items-center">
+                  <Icon name="user" className="inline-block w-4 h-4" />
+                  <span className="ml-1 hidden md:inline">
+                    Hi, {currentUser?.fname || 'Account'}
+                  </span>
+                </a>
+                <button 
+                  onClick={handleLogout}
+                  className="hover:text-white transition-colors flex items-center"
+                >
+                  <Icon name="log-out" className="inline-block w-4 h-4" />
+                  <span className="ml-1 hidden md:inline">Logout</span>
+                </button>
+              </>
+            ) : (
+              <a href={accountUrl} className="hover:text-white transition-colors border-l border-gray-600 pl-4 flex items-center">
+                <Icon name="user" className="inline-block w-4 h-4" />
+                <span className="ml-1 hidden md:inline">Account</span>
+              </a>
+            )}
           </div>
         </div>
       </div>

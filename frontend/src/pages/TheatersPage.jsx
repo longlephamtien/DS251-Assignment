@@ -207,7 +207,7 @@ export default function TheatersPage() {
             </h1>
 
             {/* Cities Grid */}
-            <div className="grid grid-cols-5 gap-x-6 gap-y-3">
+            <div className="grid grid-cols-5 gap-x-5 gap-y-3">
               {cities.map((city, idx) => (
                 <button
                   key={idx}
@@ -256,17 +256,17 @@ export default function TheatersPage() {
                     <p className="text-gray-600 text-lg">No theaters found in this city</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-4 gap-x-6 gap-y-3">
+                  <div className="grid grid-cols-4 gap-x-5 gap-y-3">
                     {filteredTheaters.map((theater) => (
                       <button
                         key={theater.id}
                         onClick={() => setSelectedTheater(theater)}
-                        className={`text-left py-2 px-3 font-medium transition-colors ${selectedTheater?.id === theater.id
+                        className={`text-left py-2 px-3 font-medium transition-colors text-sm ${selectedTheater?.id === theater.id
                           ? 'text-primary font-bold bg-indigo-50 rounded'
                           : 'text-gray-700 hover:text-primary hover:bg-gray-100 rounded'
                           }`}
                       >
-                        {theater.name.replace('BKinema ', '')}
+                        {theater.name}
                       </button>
                     ))}
                   </div>

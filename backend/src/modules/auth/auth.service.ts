@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
@@ -7,6 +7,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Injectable()
 export class AuthService {
@@ -194,11 +195,44 @@ export class AuthService {
 
   /**
    * Update user profile using stored procedure
+   * Note: birthday is NOT allowed to be changed
    */
-  async updateProfile(userId: number, updateProfileDto: UpdateProfileDto) {
-    const { fname, minit, lname, birthday, gender, district, city } = updateProfileDto;
+  async updateProfile(
+    userId: number, 
+    updateProfileDto: Omit<UpdateProfileDto, 'currentPassword'>, 
+    currentPassword: string
+  ) {
+    const { fname, minit, lname, gender, district, city } = updateProfileDto;
+
+    // Explicitly reject birthday updates
+    if ('birthday' in updateProfileDto) {
+      throw new BadRequestException('Birthday cannot be changed');
+    }
 
     try {
+      // Verify current password first
+      await this.dataSource.query(
+        `CALL sp_get_user_password(?, @password, @success, @message)`,
+        [userId],
+      );
+
+      const passwordResult = await this.dataSource.query(
+        `SELECT @password as password, @success as success, @message as message`
+      );
+
+      const passwordOutput = passwordResult[0];
+
+      if (!passwordOutput.success || !passwordOutput.password) {
+        throw new UnauthorizedException('User not found');
+      }
+
+      // Verify current password
+      const isPasswordValid = await bcrypt.compare(currentPassword, passwordOutput.password);
+      if (!isPasswordValid) {
+        throw new UnauthorizedException('Current password is incorrect');
+      }
+
+      // Now update the profile
       await this.dataSource.query(
         `CALL sp_update_user_profile(?, ?, ?, ?, ?, ?, ?, ?, @success, @message)`,
         [
@@ -206,7 +240,7 @@ export class AuthService {
           fname || null,
           minit || null,
           lname || null,
-          birthday || null,
+          null, // birthday is not allowed to be changed
           gender || null,
           district || null,
           city || null,
@@ -226,7 +260,71 @@ export class AuthService {
 
       return { message: output.message };
     } catch (error) {
+      if (error instanceof BadRequestException || error instanceof UnauthorizedException) {
+        throw error;
+      }
       throw new InternalServerErrorException('Failed to update profile');
+    }
+  }
+
+  /**
+   * Change user password using stored procedure
+   * Verifies current password before updating
+   */
+  async changePassword(userId: number, changePasswordDto: ChangePasswordDto) {
+    const { currentPassword, newPassword } = changePasswordDto;
+
+    try {
+      // Call stored procedure to get user password
+      await this.dataSource.query(
+        `CALL sp_get_user_password(?, @password, @success, @message)`,
+        [userId],
+      );
+
+      // Get output parameters
+      const passwordResult = await this.dataSource.query(
+        `SELECT @password as password, @success as success, @message as message`
+      );
+
+      const passwordOutput = passwordResult[0];
+
+      if (!passwordOutput.success || !passwordOutput.password) {
+        throw new UnauthorizedException('User not found');
+      }
+
+      // Verify current password
+      const isPasswordValid = await bcrypt.compare(currentPassword, passwordOutput.password);
+      if (!isPasswordValid) {
+        throw new UnauthorizedException('Current password is incorrect');
+      }
+
+      // Hash the new password
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+      // Call stored procedure to change password
+      await this.dataSource.query(
+        `CALL sp_change_password(?, ?, @success, @message)`,
+        [userId, hashedPassword],
+      );
+
+      // Get output parameters
+      const result = await this.dataSource.query(
+        `SELECT @success as success, @message as message`
+      );
+
+      const output = result[0];
+
+      if (!output.success) {
+        throw new InternalServerErrorException(output.message);
+      }
+
+      return { message: output.message };
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      console.error('Change password error:', error);
+      throw new InternalServerErrorException('Failed to change password');
     }
   }
 
