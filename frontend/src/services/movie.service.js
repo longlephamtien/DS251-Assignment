@@ -64,5 +64,29 @@ export const movieService = {
         } else {
             throw new Error(result.message || 'Failed to fetch movie details');
         }
+    },
+
+    /**
+     * Get a single movie by ID
+     * @param {number} id - Movie ID
+     * @returns {Promise<Object>} Movie details
+     */
+    async getMovieById(id) {
+        const response = await fetch(`${API_BASE_URL}/api/movies/id/${id}`);
+
+        if (!response.ok) {
+            if (response.status === 404) {
+                throw new Error('Movie not found');
+            }
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+            return result.data;
+        } else {
+            throw new Error(result.message || 'Failed to fetch movie details');
+        }
     }
 };

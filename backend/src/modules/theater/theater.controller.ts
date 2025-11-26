@@ -38,6 +38,42 @@ export class TheaterController {
         }
     }
 
+    @Get(':id')
+    async getTheaterById(
+        @Param('id') id: number,
+    ): Promise<ApiResponseDto<TheaterResponseDto>> {
+        try {
+            const theater = await this.theaterService.getTheaterById(Number(id));
+
+            if (!theater) {
+                throw new HttpException(
+                    {
+                        success: false,
+                        message: `Theater with id ${id} not found`,
+                    },
+                    HttpStatus.NOT_FOUND,
+                );
+            }
+
+            return {
+                success: true,
+                data: theater,
+                message: 'Theater retrieved successfully',
+            };
+        } catch (error) {
+            if (error instanceof HttpException) {
+                throw error;
+            }
+            throw new HttpException(
+                {
+                    success: false,
+                    message: error.message || 'Failed to retrieve theater',
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
     @Get(':id/schedule')
     async getSchedule(
         @Param('id') id: number,

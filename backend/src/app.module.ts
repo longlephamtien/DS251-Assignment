@@ -11,6 +11,7 @@ import { MovieModule } from './modules/movie/movie.module';
 import { TheaterModule } from './modules/theater/theater.module';
 import { ShowtimeModule } from './modules/showtime/showtime.module';
 import { SeatModule } from './modules/seat/seat.module';
+import { AuditoriumModule } from './modules/auditorium/auditorium.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { User } from './modules/user/entities/user.entity';
 import { Customer } from './modules/user/entities/customer.entity';
@@ -23,6 +24,7 @@ import { Membership } from './modules/membership/entities/membership.entity';
     TheaterModule,
     ShowtimeModule,
     SeatModule,
+    AuditoriumModule,
     ConfigModule.forRoot({
       isGlobal: true,
       load: [appConfig, databaseConfig, jwtConfig],

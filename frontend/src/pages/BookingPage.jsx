@@ -5,6 +5,9 @@ import Notification from '../components/common/Notification';
 import { useBooking } from '../context/BookingContext';
 import { showtimeService } from '../services/showtime.service';
 import { seatService } from '../services/seat.service';
+import { theaterService } from '../services/theater.service';
+import { auditoriumService } from '../services/auditorium.service';
+import { movieService } from '../services/movie.service';
 
 export default function BookingPage() {
   const { theaterId, showtimeId, date } = useParams();
@@ -13,7 +16,7 @@ export default function BookingPage() {
   const { bookingData, updateBookingData } = useBooking();
 
   // Sample booking data - would come from API based on URL params
-  const [bookingInfo] = useState({
+  const [bookingInfo, setBookingInfo] = useState({
     theater: 'BKinema Hùng Vương Plaza',
     cinema: 'Cinema 5',
     remaining: { current: 134, total: 134 },
@@ -40,8 +43,65 @@ export default function BookingPage() {
         try {
           setLoadingSeats(true);
 
+          let theaterData = null;
+          let auditoriumData = null;
+          let movieData = null;
+
           // Fetch showtime data
           const showtimeData = await showtimeService.getShowtimeById(showtimeId);
+
+          // Fetch theater data
+          if (theaterId) {
+            theaterData = await theaterService.getTheaterById(parseInt(theaterId));
+          }
+
+          // Fetch auditorium data
+          if (showtimeData.au_number && showtimeData.au_theater_id) {
+            auditoriumData = await auditoriumService.getAuditoriumById(
+              showtimeData.au_number,
+              parseInt(showtimeData.au_theater_id)
+            );
+          }
+
+          // Fetch movie data
+          if (showtimeData.movie_id) {
+            console.log("movieID", parseInt(showtimeData.movie_id))
+            movieData = await movieService.getMovieById(parseInt(showtimeData.movie_id));
+            console.log("movieData", movieData);
+          }
+
+          // Update booking info if we have all data
+          if (showtimeData && theaterData && auditoriumData) {
+            // Format date
+            const dateObj = new Date(showtimeData.date);
+            const formattedDate = `${dateObj.getDate().toString().padStart(2, '0')}/${(dateObj.getMonth() + 1).toString().padStart(2, '0')}/${dateObj.getFullYear()}`;
+
+            // Format times
+            const formatTime = (timeStr) => {
+              if (!timeStr) return '';
+              const [hours, minutes] = timeStr.split(':');
+              return `${hours}:${minutes}`;
+            };
+
+            setBookingInfo(prev => ({
+              ...prev,
+              theater: theaterData.name,
+              cinema: `Cinema ${showtimeData.au_number}`,
+              remaining: {
+                current: auditoriumData.capacity,
+                total: auditoriumData.capacity
+              },
+              showtime: formatTime(showtimeData.start_time),
+              date: formattedDate,
+              endTime: formatTime(showtimeData.end_time),
+              movie: {
+                ...prev.movie,
+                title: movieData.name,
+                rating: movieData.ageRating,
+                screen: `Cinema ${showtimeData.au_number}`
+              }
+            }));
+          }
 
           // Fetch seats using au_number and au_theater_id from showtime
           if (showtimeData.au_number && showtimeData.au_theater_id) {
@@ -60,7 +120,7 @@ export default function BookingPage() {
     };
 
     fetchShowtimeAndSeats();
-  }, [showtimeId]);
+  }, [showtimeId, theaterId]);
 
 
   // Load persisted state from location or context
@@ -452,16 +512,16 @@ export default function BookingPage() {
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Notification Modal */}
-      <Notification
-        isOpen={notification.isOpen}
-        onClose={() => setNotification({ ...notification, isOpen: false })}
-        title={notification.title}
-        message={notification.message}
-        type={notification.type}
-      />
+        {/* Notification Modal */}
+        <Notification
+          isOpen={notification.isOpen}
+          onClose={() => setNotification({ ...notification, isOpen: false })}
+          title={notification.title}
+          message={notification.message}
+          type={notification.type}
+        />
+      </div>
     </div>
   );
 }

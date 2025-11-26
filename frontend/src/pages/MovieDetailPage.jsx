@@ -27,7 +27,6 @@ export default function MovieDetailPage() {
       setError(null);
 
       const data = await movieService.getMovieBySlug(slug);
-      console.log("movie", data);
       setMovie(data);
     } catch (err) {
       console.error('Error fetching movie details:', err);
