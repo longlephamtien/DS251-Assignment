@@ -241,7 +241,7 @@ export default function MovieSection() {
                           {/* View Details Button - Left */}
                           <button
                             onClick={(e) => handleViewDetails(e, movie)}
-                            className="flex-1 bg-white/90 hover:bg-white text-gray-900 px-3 py-2 rounded-lg font-semibold text-xs shadow-lg transition-all transform hover:scale-105 whitespace-nowrap"
+                            className="flex-1 bg-white/90 hover:bg-white text-gray-900 px-3 py-2 rounded-lg font-semibold text-md shadow-lg transition-all transform hover:scale-105 whitespace-nowrap"
                           >
                             View Details
                           </button>
@@ -249,7 +249,7 @@ export default function MovieSection() {
                           {/* Booking Button - Right */}
                           <button
                             onClick={(e) => handleBooking(e)}
-                            className="flex-1 bg-primary hover:bg-secondary text-white px-3 py-2 rounded-lg font-semibold text-xs shadow-lg transition-all transform hover:scale-105 whitespace-nowrap"
+                            className="flex-1 bg-primary hover:bg-secondary text-white px-3 py-2 rounded-lg font-semibold text-md shadow-lg transition-all transform hover:scale-105 whitespace-nowrap"
                           >
                             Booking
                           </button>
