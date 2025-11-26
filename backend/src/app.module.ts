@@ -12,6 +12,9 @@ import { User } from './modules/user/entities/user.entity';
 import { Customer } from './modules/user/entities/customer.entity';
 import { Staff } from './modules/user/entities/staff.entity';
 import { Membership } from './modules/membership/entities/membership.entity';
+import { BookingModule } from './modules/booking/booking.module';
+import { PaymentModule } from './modules/payment/payment.module';
+import { RefundModule } from './modules/refund/refund.module';
 
 @Module({
   imports: [
@@ -51,6 +54,9 @@ import { Membership } from './modules/membership/entities/membership.entity';
       },
     }),
     AuthModule,
+    BookingModule,
+    PaymentModule,
+    RefundModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],
