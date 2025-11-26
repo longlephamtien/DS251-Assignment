@@ -1,29 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Icon from '../components/common/Icon';
-
-const theatersData = [
-  { id: 1, name: 'BKinema Hùng Vương Plaza', address: 'Level 7, Hung Vuong Plaza, 126 Hung Vuong Street, District 5, Ho Chi Minh City', city: 'Ho Chi Minh', fax: '+84 4 6 275 5240', hotline: '1900 2312', screens: 8, formats: ['IMAX', '4DX'] },
-  { id: 2, name: 'BKinema Crescent Mall', address: '101 Ton Dat Tien St., District 7', city: 'Ho Chi Minh', fax: '+84 4 6 275 5240', hotline: '1900 2312', screens: 10, formats: ['4DX', 'ScreenX'] },
-  { id: 3, name: 'BKinema Pearl Plaza', address: '561A Dien Bien Phu St., Binh Thanh District', city: 'Ho Chi Minh', fax: '+84 4 6 275 5240', hotline: '1900 2312', screens: 6, formats: ['Starium'] },
-  { id: 4, name: 'BKinema Pandora City', address: '65 Le Loi St., District 1', city: 'Ho Chi Minh', fax: '+84 4 6 275 5240', hotline: '1900 2312', screens: 7, formats: ['Gold Class'] },
-  { id: 5, name: 'BKinema Vincom Center Landmark 81', address: '208 Nguyen Huu Canh St., Binh Thanh District', city: 'Ho Chi Minh', fax: '+84 4 6 275 5240', hotline: '1900 2312', screens: 12, formats: ['IMAX', '4DX', 'ScreenX'] },
-  { id: 6, name: 'BKinema Aeon Binh Tan', address: 'Vincom Mega Mall Royal City, Thanh Xuan District', city: 'Ho Chi Minh', fax: '+84 4 6 275 5240', hotline: '1900 2312', screens: 10, formats: ['IMAX', '4DX'] },
-  { id: 7, name: 'BKinema Saigon Nguyen Xi', address: '458 Minh Khai St., Hai Ba Trung District', city: 'Ho Chi Minh', fax: '+84 4 6 275 5240', hotline: '1900 2312', screens: 8, formats: ['4DX'] },
-  { id: 8, name: 'BKinema Giadinh Thu Duc', address: '27 Co Linh St., Long Bien District', city: 'Ho Chi Minh', fax: '+84 4 6 275 5240', hotline: '1900 2312', screens: 6, formats: [] },
-  { id: 9, name: 'BKinema Vivo City', address: '24 Hai Ba Trung St., Hoan Kiem District', city: 'Ho Chi Minh', fax: '+84 4 6 275 5240', hotline: '1900 2312', screens: 5, formats: ['Starium'] },
-  { id: 10, name: 'BKinema Menas Mall', address: '910A Ngo Quyen St., Son Tra District', city: 'Ho Chi Minh', fax: '+84 4 6 275 5240', hotline: '1900 2312', screens: 7, formats: ['4DX'] },
-  { id: 11, name: 'BKinema Hoang Van Thu', address: '06 Nai Nam St., Hoa Cuong Bac Ward', city: 'Ho Chi Minh', fax: '+84 4 6 275 5240', hotline: '1900 2312', screens: 6, formats: [] },
-  { id: 12, name: 'BKinema Vincom Mega Mall Grand Park', address: '209 Nguyen Van Cu St., Ninh Kieu District', city: 'Ho Chi Minh', fax: '+84 4 6 275 5240', hotline: '1900 2312', screens: 5, formats: [] },
-  { id: 13, name: 'BKinema Tran Binh Phu', address: '01 Ly Tu Trong St., An Hoa Ward', city: 'Da Nang', fax: '+84 4 6 275 5240', hotline: '1900 2312', screens: 6, formats: ['4DX'] },
-  { id: 14, name: 'BKinema Liberty Citypoint', address: '1096 Phan Van Tri St., Long Binh Ward', city: 'Ha Noi', fax: '+84 4 6 275 5240', hotline: '1900 2312', screens: 6, formats: [] },
-  { id: 15, name: 'BKinema Aeon Tan Phu', address: 'Thu Dau Mot, Binh Duong New City', city: 'Binh Duong', fax: '+84 4 6 275 5240', hotline: '1900 2312', screens: 8, formats: ['4DX'] },
-  { id: 16, name: 'BKinema Vincom Dong Khoi', address: '72 Le Thanh Ton St., District 1', city: 'Ho Chi Minh', fax: '+84 4 6 275 5240', hotline: '1900 2312', screens: 8, formats: ['4DX'] },
-  { id: 17, name: 'BKinema Su Van Hanh', address: '177 Hai Ba Trung St., District 3', city: 'Ho Chi Minh', fax: '+84 4 6 275 5240', hotline: '1900 2312', screens: 8, formats: ['4DX'] },
-  { id: 18, name: 'BKinema Ly Chinh Thang', address: '425 Ly Thuong Kiet St., District 10', city: 'Ho Chi Minh', fax: '+84 4 6 275 5240', hotline: '1900 2312', screens: 8, formats: ['4DX'] },
-];
+import { theaterService } from '../services/theater.service';
 
 const cities = [
-  'Ho Chi Minh', 'Ha Noi', 'Quang Ninh', 'Ba Ria - Vung Tau', 'Binh Dinh',
+  'Ho Chi Minh City', 'Ha Noi', 'Quang Ninh', 'Ba Ria - Vung Tau', 'Binh Dinh',
   'Binh Duong', 'Dak Lak', 'Da Nang', 'Bac Giang', 'Vinh Long',
   'Hung Yen', 'Khanh Hoa', 'Phu Tho', 'Quang Ngai', 'Thai Nguyen',
   'Tra Vinh', 'Kien Giang', 'Dong Thap', 'Lang Son', 'Bac Lieu',
@@ -35,10 +15,42 @@ export default function TheatersPage() {
   const [selectedCity, setSelectedCity] = useState('');
   const [selectedTheater, setSelectedTheater] = useState(null);
   const [activeTab, setActiveTab] = useState('schedule');
+  const [theaters, setTheaters] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const filteredTheaters = selectedCity
-    ? theatersData.filter(theater => theater.city === selectedCity)
-    : [];
+  // Fetch theaters when a city is selected
+  useEffect(() => {
+    if (selectedCity) {
+      fetchTheaters();
+    } else {
+      setTheaters([]);
+      setSelectedTheater(null);
+    }
+  }, [selectedCity]);
+
+  const fetchTheaters = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const data = await theaterService.getTheaters({
+        city: selectedCity,
+        limit: 100,
+        offset: 0
+      });
+
+      setTheaters(data);
+    } catch (err) {
+      console.error('Error fetching theaters:', err);
+      setError(err.message || 'Failed to load theaters. Please try again later.');
+      setTheaters([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredTheaters = theaters;
 
   // Generate dates from -1 to +28 days from today
   const generateDates = () => {
@@ -98,8 +110,8 @@ export default function TheatersPage() {
                     setSelectedTheater(null);
                   }}
                   className={`text-left py-2 px-3 font-medium transition-colors ${selectedCity === city
-                      ? 'text-primary font-bold bg-indigo-50 rounded'
-                      : 'text-gray-700 hover:text-primary hover:bg-gray-100 rounded'
+                    ? 'text-primary font-bold bg-indigo-50 rounded'
+                    : 'text-gray-700 hover:text-primary hover:bg-gray-100 rounded'
                     }`}
                 >
                   {city}
@@ -116,25 +128,41 @@ export default function TheatersPage() {
                 <div className="border-t-2 border-gray-300 mb-8 mx-2"></div>
 
                 {/* Theater Grid */}
-                <div className="grid grid-cols-4 gap-x-6 gap-y-3">
-                  {filteredTheaters.map((theater) => (
+                {loading ? (
+                  <div className="text-center py-12">
+                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                    <p className="text-gray-600 text-lg mt-4">Loading theaters...</p>
+                  </div>
+                ) : error ? (
+                  <div className="text-center py-12">
+                    <Icon name="alert-circle" className="w-12 h-12 mx-auto mb-4 text-red-500" />
+                    <p className="text-red-500 text-lg mb-4">{error}</p>
                     <button
-                      key={theater.id}
-                      onClick={() => setSelectedTheater(theater)}
-                      className={`text-left py-2 px-3 font-medium transition-colors ${selectedTheater?.id === theater.id
-                          ? 'text-primary font-bold bg-indigo-50 rounded'
-                          : 'text-gray-700 hover:text-primary hover:bg-gray-100 rounded'
-                        }`}
+                      onClick={fetchTheaters}
+                      className="bg-primary hover:bg-secondary text-white px-6 py-2 rounded-lg font-semibold transition-colors"
                     >
-                      {theater.name.replace('BKinema ', '')}
+                      Try Again
                     </button>
-                  ))}
-                </div>
-
-                {filteredTheaters.length === 0 && (
+                  </div>
+                ) : filteredTheaters.length === 0 ? (
                   <div className="text-center py-12">
                     <Icon name="building" className="w-16 h-16 mx-auto mb-4 text-gray-400" />
                     <p className="text-gray-600 text-lg">No theaters found in this city</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-4 gap-x-6 gap-y-3">
+                    {filteredTheaters.map((theater) => (
+                      <button
+                        key={theater.id}
+                        onClick={() => setSelectedTheater(theater)}
+                        className={`text-left py-2 px-3 font-medium transition-colors ${selectedTheater?.id === theater.id
+                          ? 'text-primary font-bold bg-indigo-50 rounded'
+                          : 'text-gray-700 hover:text-primary hover:bg-gray-100 rounded'
+                          }`}
+                      >
+                        {theater.name.replace('BKinema ', '')}
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
@@ -188,11 +216,11 @@ export default function TheatersPage() {
                   <div className="space-y-3 text-sm text-gray-700 mb-4">
                     <p className="flex items-start gap-2">
                       <Icon name="location" className="w-5 h-5 mt-0.5 text-primary flex-shrink-0" />
-                      <span>{selectedTheater.address}</span>
+                      <span>{selectedTheater.street}, {selectedTheater.district}, {selectedTheater.city}</span>
                     </p>
                     <p className="flex items-center gap-2">
                       <Icon name="phone" className="w-5 h-5 text-primary" />
-                      <span><strong>Hotline:</strong> {selectedTheater.hotline}</span>
+                      <span><strong>Hotline:</strong> 1900 2312</span>
                     </p>
                   </div>
 
@@ -213,8 +241,8 @@ export default function TheatersPage() {
                   <button
                     onClick={() => setActiveTab('schedule')}
                     className={`flex-1 py-3 px-4 font-semibold flex items-center justify-center gap-2 transition-colors ${activeTab === 'schedule'
-                        ? 'bg-primary text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-primary text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                   >
                     <Icon name="calendar" className="w-5 h-5" />
@@ -223,8 +251,8 @@ export default function TheatersPage() {
                   <button
                     onClick={() => setActiveTab('price')}
                     className={`flex-1 py-3 px-4 font-semibold flex items-center justify-center gap-2 transition-colors ${activeTab === 'price'
-                        ? 'bg-primary text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-primary text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                   >
                     <Icon name="ticket" className="w-5 h-5" />
@@ -255,8 +283,8 @@ export default function TheatersPage() {
                             <button
                               key={idx}
                               className={`flex flex-col items-center min-w-[70px] py-2 px-3 rounded transition-colors ${date.isToday
-                                  ? 'bg-primary text-white'
-                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                ? 'bg-primary text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                 }`}
                             >
                               <span className="text-xs font-medium">{date.month}</span>

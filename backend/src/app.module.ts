@@ -8,10 +8,12 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { HealthController } from './health/health.controller';
 import { MovieModule } from './modules/movie/movie.module';
+import { TheaterModule } from './modules/theater/theater.module';
 
 @Module({
   imports: [
     MovieModule,
+    TheaterModule,
     ConfigModule.forRoot({
       isGlobal: true,
       load: [appConfig, databaseConfig, jwtConfig],

@@ -28,24 +28,24 @@ export class TheaterService {
                 `Fetching theaters with name=${name}, city=${city}, district=${district}, limit=${limit}, offset=${offset}`,
             );
 
-            const queryBuilder = this.theaterRepository.createQueryBuilder('theater');
+            // Execute the stored procedure
+            const result = await this.theaterRepository.query(
+                'CALL GetTheaters(?, ?, ?, ?, ?)',
+                [name, city, district, limit, offset],
+            );
 
-            if (name) {
-                queryBuilder.andWhere('theater.name LIKE :name', { name: `%${name}%` });
+            this.logger.log(`Raw stored procedure result: ${JSON.stringify(result)}`);
+
+            // Handle different result formats (mysql2 returns [[rows], metadata], others might return [rows])
+            let theaters: any[] = [];
+            if (Array.isArray(result) && Array.isArray(result[0])) {
+                theaters = result[0];
+            } else if (Array.isArray(result)) {
+                theaters = result;
             }
 
-            if (city) {
-                queryBuilder.andWhere('theater.city = :city', { city });
-            }
-
-            if (district) {
-                queryBuilder.andWhere('theater.district = :district', { district });
-            }
-
-            const theaters = await queryBuilder
-                .take(limit)
-                .skip(offset)
-                .getMany();
+            // Filter out OkPacket if it exists in the array (sometimes happens with multiple statements)
+            theaters = theaters.filter(item => item && typeof item === 'object' && !('fieldCount' in item));
 
             this.logger.log(`Retrieved ${theaters.length} theaters from database`);
 
