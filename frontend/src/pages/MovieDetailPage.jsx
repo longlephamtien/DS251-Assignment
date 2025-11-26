@@ -320,13 +320,46 @@ function InfoRow({ icon, label, value }) {
 function BookingModal({ movie, dates, onClose }) {
   const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState(dates[0].fullDate);
-  const [selectedCity, setSelectedCity] = useState('Ho Chi Minh');
+  const [selectedCity, setSelectedCity] = useState('Ho Chi Minh City');
   const [selectedFormat, setSelectedFormat] = useState('2D Vietnam Sub');
   const [theaters, setTheaters] = useState([]);
   const [loadingTheaters, setLoadingTheaters] = useState(false);
   const [theaterSchedules, setTheaterSchedules] = useState({});
 
-  const cities = ['Ho Chi Minh', 'Ha Noi', 'Da Nang', 'Can Tho', 'Dong Nai', 'Hai Phong', 'Quang Ninh', 'Ba Ria - Vung Tau', 'Binh Dinh', 'Binh Duong', 'Dak Lak', 'Tra Vinh', 'Yen Bai', 'Vinh Long', 'Kien Giang', 'Hau Giang', 'Ha Tinh', 'Phu Yen', 'Dong Thap', 'Bac Lieu', 'Hung Yen', 'Kon Tum'];
+  const cities = [
+    'Ho Chi Minh City',
+    'Ha Noi',
+    'Da Nang',
+    'Can Tho',
+    'Dong Nai',
+    'Hai Phong',
+    'Quang Ninh',
+    'Ba Ria - Vung Tau',
+    'Binh Dinh',
+    'Binh Duong',
+    'Dak Lak',
+    'Tra Vinh',
+    'Yen Bai',
+    'Vinh Long',
+    'Kien Giang',
+    'Hau Giang',
+    'Ha Tinh',
+    'Phu Yen',
+    'Dong Thap',
+    'Bac Lieu',
+    'Hung Yen',
+    'Khanh Hoa',
+    'Kon Tum',
+    'Lang Son',
+    'Nghe An',
+    'Phu Tho',
+    'Quang Ngai',
+    'Soc Trang',
+    'Son La',
+    'Tay Ninh',
+    'Thai Nguyen',
+    'Tien Giang'
+];
   const formats = ['2D Vietnam Sub', 'IMAX2D Vietnam Sub', '4DX2D Vietnam Sub', 'SCREENX-2D Vietnam Sub', 'ULTRA 4DX-SCX2D Vietnam Sub'];
 
   // Fetch theaters when city changes
@@ -472,7 +505,7 @@ function BookingModal({ movie, dates, onClose }) {
                     <div key={theater.id} className="border-b pb-6 last:border-b-0">
                       <h3 className="text-lg font-bold text-gray-900 mb-1">{theater.name}</h3>
                       <p className="text-sm text-gray-600 mb-3">
-                        {theater.address}, {theater.district}, {theater.city}
+                        {theater.street}, {theater.district}, {theater.city}
                       </p>
 
                       {!schedule ? (

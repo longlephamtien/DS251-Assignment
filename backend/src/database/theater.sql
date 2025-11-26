@@ -65,6 +65,8 @@ BEGIN
         m.name AS movie_name,
         m.age_rating,
         m.poster_file,
+        m.duration,
+        GROUP_CONCAT(DISTINCT g.genre ORDER BY g.genre SEPARATOR ', ') AS genres,
 
         -- auditorium info
         a.number AS auditorium_number,
@@ -77,10 +79,17 @@ BEGIN
     JOIN auditorium a
         ON s.au_number = a.number
        AND s.au_theater_id = a.theater_id
+    LEFT JOIN genre g
+        ON m.id = g.movie_id
 
     WHERE 
         a.theater_id = p_theater_id
         AND s.date = p_date
+
+    GROUP BY 
+        s.id, s.date, s.start_time, s.end_time,
+        m.id, m.name, m.age_rating, m.poster_file, m.duration,
+        a.number, a.type, a.capacity
 
     ORDER BY 
         m.name ASC,

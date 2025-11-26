@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import Icon from '../components/common/Icon';
 import { theaterService } from '../services/theater.service';
 
+import theater1 from '../assets/media/theaters/theater-1.png';
+import theater2 from '../assets/media/theaters/theater-2.jpg';
+import theater3 from '../assets/media/theaters/theater-3.png';
+
 const cities = [
   'Ho Chi Minh City',
   'Ha Noi',
@@ -47,6 +51,7 @@ export default function TheatersPage() {
   const [loading, setLoading] = useState(false);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   // Fetch theaters when a city is selected
   useEffect(() => {
@@ -120,6 +125,8 @@ export default function TheatersPage() {
           name: item.movie_name,
           age_rating: item.age_rating,
           poster_file: item.poster_file,
+          duration: item.duration,
+          genres: item.genres,
           formats: new Map()
         });
       }
@@ -152,6 +159,17 @@ export default function TheatersPage() {
   };
 
   const filteredTheaters = theaters;
+
+  // Theater images
+  const theaterImages = [theater1, theater2, theater3];
+
+  const nextImage = () => {
+    setCurrentImageIndex((prev) => (prev + 1) % theaterImages.length);
+  };
+
+  const prevImage = () => {
+    setCurrentImageIndex((prev) => (prev - 1 + theaterImages.length) % theaterImages.length);
+  };
 
   // Generate dates from -1 to +28 days from today
   const generateDates = () => {
@@ -303,18 +321,37 @@ export default function TheatersPage() {
               <div className="bg-white rounded-lg overflow-hidden shadow-lg mb-8">
                 <div className="relative aspect-video bg-gray-900">
                   <img
-                    src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='450'%3E%3Crect width='800' height='450' fill='%23111827'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='Arial, sans-serif' font-size='20' fill='%23666'%3ETheater Image%3C/text%3E%3C/svg%3E"
-                    alt="Theater"
+                    src={theaterImages[currentImageIndex]}
+                    alt={`Theater ${currentImageIndex + 1}`}
                     className="w-full h-full object-cover"
                   />
 
                   {/* Navigation Arrows */}
-                  <button className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-3 rounded transition-colors">
+                  <button 
+                    onClick={prevImage}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-3 rounded transition-colors"
+                  >
                     <Icon name="chevron-left" className="w-6 h-6" />
                   </button>
-                  <button className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-3 rounded transition-colors">
+                  <button 
+                    onClick={nextImage}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-3 rounded transition-colors"
+                  >
                     <Icon name="chevron-right" className="w-6 h-6" />
                   </button>
+
+                  {/* Image Indicators */}
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+                    {theaterImages.map((_, index) => (
+                      <button
+                        key={index}
+                        onClick={() => setCurrentImageIndex(index)}
+                        className={`w-2 h-2 rounded-full transition-colors ${
+                          index === currentImageIndex ? 'bg-white' : 'bg-white/50'
+                        }`}
+                      />
+                    ))}
+                  </div>
                 </div>
 
                 {/* Theater Info */}
@@ -464,7 +501,7 @@ export default function TheatersPage() {
                                           </span>
                                         </div>
                                         <p className="text-gray-500 text-sm font-medium">
-                                          Action, Adventure • 2h 15m
+                                          {movie.genres || 'N/A'} • {movie.duration ? `${movie.duration} minutes` : 'N/A'}
                                         </p>
                                       </div>
                                     </div>
