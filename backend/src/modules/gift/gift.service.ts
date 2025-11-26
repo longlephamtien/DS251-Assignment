@@ -80,21 +80,23 @@ export class GiftService {
    */
   async getReceivedGifts(customerId: number) {
     try {
-      const result = await this.dataSource.query(
-        `SELECT 
-          b.id as bookingId,
-          b.created_time_at as createdAt,
-          b.status,
-          sg.sender_id as senderId,
-          CONCAT(u.fname, ' ', u.lname) as senderName,
-          u.email as senderEmail
-         FROM booking b
-         JOIN send_gift sg ON b.id = sg.booking_id
-         JOIN User u ON sg.sender_id = u.id
-         WHERE sg.receiver_id = ?
-         ORDER BY b.created_time_at DESC`,
-        [customerId],
-      );
+      const query = this.dataSource
+        .createQueryBuilder()
+        .select([
+          'b.id as bookingId',
+          'b.created_time_at as createdAt',
+          'b.status as status',
+          'sg.sender_id as senderId',
+          "CONCAT(u.fname, ' ', u.lname) as senderName",
+          'u.email as senderEmail',
+        ])
+        .from('booking', 'b')
+        .innerJoin('send_gift', 'sg', 'b.id = sg.booking_id')
+        .innerJoin('User', 'u', 'sg.sender_id = u.id')
+        .where('sg.receiver_id = :customerId', { customerId })
+        .orderBy('b.created_time_at', 'DESC');
+
+      const result = await query.getRawMany();
 
       return {
         success: true,
@@ -112,21 +114,23 @@ export class GiftService {
    */
   async getSentGifts(customerId: number) {
     try {
-      const result = await this.dataSource.query(
-        `SELECT 
-          b.id as bookingId,
-          b.created_time_at as createdAt,
-          b.status,
-          sg.receiver_id as receiverId,
-          CONCAT(u.fname, ' ', u.lname) as receiverName,
-          u.email as receiverEmail
-         FROM booking b
-         JOIN send_gift sg ON b.id = sg.booking_id
-         JOIN User u ON sg.receiver_id = u.id
-         WHERE sg.sender_id = ?
-         ORDER BY b.created_time_at DESC`,
-        [customerId],
-      );
+      const query = this.dataSource
+        .createQueryBuilder()
+        .select([
+          'b.id as bookingId',
+          'b.created_time_at as createdAt',
+          'b.status as status',
+          'sg.receiver_id as receiverId',
+          "CONCAT(u.fname, ' ', u.lname) as receiverName",
+          'u.email as receiverEmail',
+        ])
+        .from('booking', 'b')
+        .innerJoin('send_gift', 'sg', 'b.id = sg.booking_id')
+        .innerJoin('User', 'u', 'sg.receiver_id = u.id')
+        .where('sg.sender_id = :customerId', { customerId })
+        .orderBy('b.created_time_at', 'DESC');
+
+      const result = await query.getRawMany();
 
       return {
         success: true,

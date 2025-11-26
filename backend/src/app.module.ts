@@ -16,6 +16,10 @@ import { BookingModule } from './modules/booking/booking.module';
 import { PaymentModule } from './modules/payment/payment.module';
 import { RefundModule } from './modules/refund/refund.module';
 import { GiftModule } from './modules/gift/gift.module';
+import { CouponModule } from './modules/coupon/coupon.module';
+import { Coupon } from './modules/coupon/entities/coupon.entity';
+import { Booking } from './modules/booking/entities/booking.entity';
+import { Refund } from './modules/refund/entities/refund.entity';
 
 @Module({
   imports: [
@@ -46,7 +50,7 @@ import { GiftModule } from './modules/gift/gift.module';
           username: db?.username,
           password: db?.password,
           database: db?.database,
-          entities: [User, Customer, Staff, Membership],
+          entities: [User, Customer, Staff, Membership, Coupon, Booking, Refund],
           synchronize: false,
           charset: 'utf8mb4',
           collation: 'utf8mb4_unicode_ci',
@@ -59,6 +63,7 @@ import { GiftModule } from './modules/gift/gift.module';
     PaymentModule,
     RefundModule,
     GiftModule,
+    CouponModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],
