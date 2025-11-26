@@ -15,6 +15,7 @@ import { Membership } from './modules/membership/entities/membership.entity';
 import { BookingModule } from './modules/booking/booking.module';
 import { PaymentModule } from './modules/payment/payment.module';
 import { RefundModule } from './modules/refund/refund.module';
+import { GiftModule } from './modules/gift/gift.module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { RefundModule } from './modules/refund/refund.module';
     BookingModule,
     PaymentModule,
     RefundModule,
+    GiftModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],
