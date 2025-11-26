@@ -3,13 +3,14 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Icon from '../components/common/Icon';
 import Notification from '../components/common/Notification';
 import { useBooking } from '../context/BookingContext';
+import { startBooking } from '../api/bookingService';
 
 export default function BookingPage() {
   const { theaterId, showtimeId, date } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const { bookingData, updateBookingData } = useBooking();
-  
+
   // Sample booking data - would come from API based on URL params
   const [bookingInfo] = useState({
     theater: 'BKinema Hùng Vương Plaza',
@@ -28,6 +29,7 @@ export default function BookingPage() {
 
   const [selectedSeats, setSelectedSeats] = useState(bookingData.selectedSeats || []);
   const movieCombo = bookingData.comboTotal || 0;
+  const [isLoading, setIsLoading] = useState(false);
 
   // Load persisted state from location or context
   useEffect(() => {
@@ -119,7 +121,7 @@ export default function BookingPage() {
 
     const row = seat.charAt(0);
     const seatRow = seatRows.find(r => r.row === row);
-    
+
     if (selectedSeats.includes(seat)) {
       // Deselect seat
       setSelectedSeats(selectedSeats.filter(s => s !== seat));
@@ -128,7 +130,7 @@ export default function BookingPage() {
       if (selectedSeats.length > 0) {
         const firstSelectedSeat = selectedSeats[0];
         const firstSeatRow = seatRows.find(r => r.row === firstSelectedSeat.charAt(0));
-        
+
         if (firstSeatRow.type !== seatRow.type) {
           setNotification({
             isOpen: true,
@@ -142,7 +144,7 @@ export default function BookingPage() {
 
       // Check for empty seat between selected seats
       const newSelection = [...selectedSeats, seat];
-      
+
       // Group seats by row
       const seatsByRow = {};
       newSelection.forEach(s => {
@@ -196,15 +198,92 @@ export default function BookingPage() {
 
   const getSeatColor = (seat, type) => {
     const status = getSeatStatus(seat);
-    
+
     if (status === 'checked') return 'bg-red-600 text-white border-red-600';
     if (status === 'occupied') return 'bg-gray-400 text-white cursor-not-allowed';
     if (status === 'unavailable') return 'bg-gray-300 text-gray-500 cursor-not-allowed';
-    
+
     // Available seats
     if (type === 'vip') return 'bg-pink-200 text-gray-800 hover:bg-pink-300 border-pink-400';
     if (type === 'sweetbox') return 'bg-pink-400 text-white hover:bg-pink-500 border-pink-600';
     return 'bg-green-100 text-gray-800 hover:bg-green-200 border-green-400';
+  };
+
+  const handleNext = async () => {
+    if (selectedSeats.length === 0) {
+      setNotification({
+        isOpen: true,
+        title: 'No Seats Selected',
+        message: 'Please select at least one seat to continue.',
+        type: 'warning'
+      });
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Group seats by type for display
+      const seatsByType = selectedSeats.reduce((acc, seat) => {
+        const row = seat.charAt(0);
+        const seatRow = seatRows.find(r => r.row === row);
+        if (seatRow) {
+          const type = seatRow.type;
+          if (!acc[type]) {
+            acc[type] = { count: 0, seats: [], price: SEAT_PRICES[type] };
+          }
+          acc[type].count++;
+          acc[type].seats.push(seat);
+        }
+        return acc;
+      }, {});
+
+      // TODO: Map seat names to real seat IDs from backend
+      // Currently using dummy seat IDs for testing
+      // In production, you need to:
+      // 1. Fetch seat map with IDs from backend when page loads
+      // 2. Map selected seat names (e.g., 'A1', 'B2') to their database IDs
+      const seatIds = selectedSeats.map((_, index) => index + 1);
+
+      // TODO: Get real customer ID from authentication context
+      // Currently using a test customer ID
+      const customerId = bookingData.customerId || 1;
+
+      // Call API to start booking
+      const response = await startBooking(customerId, parseInt(showtimeId), seatIds);
+
+      // Convert bookingId to number (MySQL may return string)
+      const bookingId = parseInt(response.bookingId);
+
+      // Update context with booking ID
+      updateBookingData({
+        bookingId: bookingId,
+        customerId,
+        selectedSeats,
+        seatTotal: total,
+        seatsByType,
+        bookingInfo
+      });
+
+      // Navigate to combo page
+      navigate(`/booking/combo/theater/${theaterId}/showtime/${showtimeId}/date/${date}`, {
+        state: {
+          selectedSeats,
+          bookingInfo,
+          seatTotal: total,
+          seatsByType
+        }
+      });
+    } catch (error) {
+      setNotification({
+        isOpen: true,
+        title: 'Booking Failed',
+        message: error.message || 'Failed to create booking. Please try again.',
+        type: 'error'
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -350,35 +429,20 @@ export default function BookingPage() {
 
                 {/* Next Button */}
                 <button
-                  onClick={() => {
-                    // Group seats by type
-                    const seatsByType = selectedSeats.reduce((acc, seat) => {
-                      const row = seat.charAt(0);
-                      const seatRow = seatRows.find(r => r.row === row);
-                      if (seatRow) {
-                        const type = seatRow.type;
-                        if (!acc[type]) {
-                          acc[type] = { count: 0, seats: [], price: SEAT_PRICES[type] };
-                        }
-                        acc[type].count++;
-                        acc[type].seats.push(seat);
-                      }
-                      return acc;
-                    }, {});
-                    
-                    navigate(`/booking/combo/theater/${theaterId}/showtime/${showtimeId}/date/${date}`, {
-                      state: {
-                        selectedSeats,
-                        bookingInfo,
-                        seatTotal: total,
-                        seatsByType
-                      }
-                    });
-                  }}
-                  className="flex items-center gap-2 bg-red-600 hover:bg-red-700 px-6 py-3 rounded transition-colors"
+                  onClick={handleNext}
+                  disabled={isLoading || selectedSeats.length === 0}
+                  className="flex items-center gap-2 bg-red-600 hover:bg-red-700 px-6 py-3 rounded transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
-                  <span className="font-semibold">NEXT</span>
-                  <Icon name="chevron-right" className="w-5 h-5" />
+                  {isLoading ? (
+                    <>
+                      <span className="font-semibold">LOADING...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-semibold">NEXT</span>
+                      <Icon name="chevron-right" className="w-5 h-5" />
+                    </>
+                  )}
                 </button>
               </div>
             </div>

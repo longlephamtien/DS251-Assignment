@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Icon from '../components/common/Icon';
+import Notification from '../components/common/Notification';
 import { useBooking } from '../context/BookingContext';
+import { confirmPayment, cancelPayment, generateTransactionId } from '../api/bookingService';
 import atmLogo from '../assets/atm-logo.png';
 import visaMasterLogo from '../assets/visa-mastercard-logo.png';
 import momoLogo from '../assets/momo-logo.png';
@@ -14,11 +16,11 @@ export default function PaymentPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { bookingData } = useBooking();
-  
+
   // Get booking data from location state or context
-  const { 
-    selectedSeats = bookingData.selectedSeats || [], 
-    bookingInfo = bookingData.bookingInfo || {}, 
+  const {
+    selectedSeats = bookingData.selectedSeats || [],
+    bookingInfo = bookingData.bookingInfo || {},
     seatTotal = bookingData.seatTotal || 0,
     seatsByType = bookingData.seatsByType || {},
     comboTotal = bookingData.comboTotal || 0,
@@ -31,6 +33,13 @@ export default function PaymentPage() {
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [countdown, setCountdown] = useState(300); // 5 minutes in seconds
   const [expandedSection, setExpandedSection] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [notification, setNotification] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info'
+  });
 
   const toggleSection = (sectionId) => {
     setExpandedSection(expandedSection === sectionId ? null : sectionId);
@@ -42,7 +51,8 @@ export default function PaymentPage() {
       setCountdown(prev => {
         if (prev <= 1) {
           clearInterval(timer);
-          // Navigate back or show timeout message
+          // Auto-cancel booking when time runs out
+          handleTimeout();
           return 0;
         }
         return prev - 1;
@@ -50,7 +60,28 @@ export default function PaymentPage() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleTimeout = async () => {
+    if (!bookingData.bookingId) return;
+
+    try {
+      await cancelPayment(bookingData.bookingId, 'Payment timeout - 5 minutes exceeded');
+      setNotification({
+        isOpen: true,
+        title: 'Payment Timeout',
+        message: 'Your booking has been cancelled due to timeout. Please start a new booking.',
+        type: 'error'
+      });
+
+      // Redirect to home after 3 seconds
+      setTimeout(() => {
+        navigate('/');
+      }, 3000);
+    } catch (error) {
+      console.error('Failed to cancel booking on timeout:', error);
+    }
+  };
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -71,17 +102,88 @@ export default function PaymentPage() {
   const discount = pointsToUse;
   const finalTotal = totalPrice - discount;
 
-  const handlePayment = () => {
+  const handlePayment = async () => {
     if (!selectedPayment) {
-      alert('Please select a payment method');
+      setNotification({
+        isOpen: true,
+        title: 'Payment Method Required',
+        message: 'Please select a payment method to continue.',
+        type: 'warning'
+      });
       return;
     }
     if (!agreeTerms) {
-      alert('Please agree to the Terms and Conditions');
+      setNotification({
+        isOpen: true,
+        title: 'Terms Required',
+        message: 'Please agree to the Terms and Conditions to continue.',
+        type: 'warning'
+      });
       return;
     }
-    // Process payment
-    alert('Processing payment...');
+
+    if (!bookingData.bookingId) {
+      setNotification({
+        isOpen: true,
+        title: 'Booking Error',
+        message: 'No booking found. Please start from seat selection.',
+        type: 'error'
+      });
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Map payment method names
+      const paymentMethodMap = {
+        'atm': 'ATM Card',
+        'credit': 'Credit/Debit Card',
+        'momo': 'MoMo',
+        'zalopay': 'ZaloPay',
+        'vnpay': 'VNPAY',
+        'shopeepay': 'ShopeePay'
+      };
+
+      const paymentMethod = paymentMethodMap[selectedPayment] || selectedPayment;
+      const transactionId = generateTransactionId();
+      const durationInMinutes = Math.ceil((300 - countdown) / 60); // Calculate how long payment took
+
+      // Call API to confirm payment
+      const response = await confirmPayment(
+        bookingData.bookingId,
+        paymentMethod,
+        transactionId,
+        finalTotal,
+        durationInMinutes
+      );
+
+      // Show success notification
+      setNotification({
+        isOpen: true,
+        title: 'Payment Successful',
+        message: `Your booking has been confirmed! Payment ID: ${response.paymentId}`,
+        type: 'success'
+      });
+
+      // Clear booking data
+      // clearBookingData(); // Uncomment if you want to clear after success
+
+      // Redirect to success page or home after 2 seconds
+      setTimeout(() => {
+        navigate('/', { state: { paymentSuccess: true, paymentId: response.paymentId } });
+      }, 2000);
+
+    } catch (error) {
+      setNotification({
+        isOpen: true,
+        title: 'Payment Failed',
+        message: error.message || 'Failed to process payment. Please try again.',
+        type: 'error'
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handlePrevious = () => {
@@ -110,8 +212,8 @@ export default function PaymentPage() {
                   <h3 className="font-bold text-gray-900">
                     <span className="text-gray-600">Step 1: </span>METHOD OF DISCOUNT
                   </h3>
-                  <button 
-                    onClick={() => {/* Reset logic */}}
+                  <button
+                    onClick={() => {/* Reset logic */ }}
                     className="flex items-center gap-1 text-sm text-gray-700 hover:text-gray-900"
                   >
                     <Icon name="refresh" className="w-4 h-4" />
@@ -518,16 +620,33 @@ export default function PaymentPage() {
               {/* Payment Button */}
               <button
                 onClick={handlePayment}
-                disabled={!selectedPayment || !agreeTerms}
+                disabled={!selectedPayment || !agreeTerms || isLoading}
                 className="flex items-center gap-2 bg-red-600 hover:bg-red-700 px-6 py-3 rounded transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
-                <Icon name="credit-card" className="w-5 h-5" />
-                <span className="font-semibold">PAYMENT</span>
+                {isLoading ? (
+                  <>
+                    <span className="font-semibold">PROCESSING...</span>
+                  </>
+                ) : (
+                  <>
+                    <Icon name="credit-card" className="w-5 h-5" />
+                    <span className="font-semibold">PAYMENT</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Notification Modal */}
+      <Notification
+        isOpen={notification.isOpen}
+        onClose={() => setNotification({ ...notification, isOpen: false })}
+        title={notification.title}
+        message={notification.message}
+        type={notification.type}
+      />
     </div>
   );
 }
