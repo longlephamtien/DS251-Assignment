@@ -4,6 +4,7 @@ import Icon from '../components/common/Icon';
 import Notification from '../components/common/Notification';
 import { useBooking } from '../context/BookingContext';
 import { confirmPayment, cancelPayment, generateTransactionId } from '../api/bookingService';
+import { couponService } from '../services';
 import atmLogo from '../assets/media/payment/atm-logo.png';
 import visaMasterLogo from '../assets/media/payment/visa-mastercard-logo.png';
 import momoLogo from '../assets/media/payment/momo-logo.png';
@@ -57,6 +58,14 @@ export default function PaymentPage() {
     message: '',
     type: 'info'
   });
+  
+  // Coupon states
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponError, setCouponError] = useState('');
+  const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
+  const [availableCoupons, setAvailableCoupons] = useState([]);
+  const [isLoadingCoupons, setIsLoadingCoupons] = useState(false);
 
 
   console.log("Booking Data:", bookingData);
@@ -111,6 +120,27 @@ export default function PaymentPage() {
 
   const { mins, secs } = formatTime(countdown);
 
+  // Load available coupons when coupon section is expanded
+  useEffect(() => {
+    const loadCoupons = async () => {
+      if (expandedSection === 'coupon' && availableCoupons.length === 0) {
+        setIsLoadingCoupons(true);
+        try {
+          const couponsData = await couponService.getMyCoupons();
+          const available = couponsData.coupons.filter(c => c.state === 'Available');
+          setAvailableCoupons(available);
+        } catch (error) {
+          console.error('Failed to load coupons:', error);
+          // User might not be logged in, that's okay
+          setAvailableCoupons([]);
+        } finally {
+          setIsLoadingCoupons(false);
+        }
+      }
+    };
+    loadCoupons();
+  }, [expandedSection]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleApplyPoints = () => {
     if (pointsToUse > cgvPoints) {
       alert('Not enough points');
@@ -119,8 +149,66 @@ export default function PaymentPage() {
     // Apply points logic
   };
 
-  const discount = pointsToUse;
-  const finalTotal = totalPrice - discount;
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) {
+      setCouponError('Please enter a coupon code');
+      return;
+    }
+
+    setIsValidatingCoupon(true);
+    setCouponError('');
+
+    try {
+      const couponData = await couponService.validateCoupon(couponCode);
+      setAppliedCoupon(couponData);
+      setCouponError('');
+      setNotification({
+        isOpen: true,
+        title: 'Success',
+        message: `Coupon applied! Discount: ₫${couponData.discountValue.toLocaleString()}`,
+        type: 'success'
+      });
+    } catch (error) {
+      setCouponError(error.message);
+      setAppliedCoupon(null);
+      setNotification({
+        isOpen: true,
+        title: 'Coupon Error',
+        message: error.message,
+        type: 'error'
+      });
+    } finally {
+      setIsValidatingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode('');
+    setCouponError('');
+  };
+
+  const handleSelectCoupon = (coupon) => {
+    setCouponCode(coupon.couponCode);
+    setAppliedCoupon({
+      couponId: coupon.couponId,
+      couponCode: coupon.couponCode,
+      couponType: coupon.couponType,
+      discountValue: parseFloat(coupon.balance) || 0,
+      expiryDate: coupon.expiryDate,
+    });
+    setCouponError('');
+    setNotification({
+      isOpen: true,
+      title: 'Success',
+      message: `Coupon ${coupon.couponCode} applied! Discount: ₫${parseFloat(coupon.balance).toLocaleString()}`,
+      type: 'success'
+    });
+  };
+
+  const couponDiscount = appliedCoupon ? appliedCoupon.discountValue : 0;
+  const discount = pointsToUse + couponDiscount;
+  const finalTotal = Math.max(0, totalPrice - discount);
 
   const handlePayment = async () => {
     if (!selectedPayment) {
@@ -284,24 +372,96 @@ export default function PaymentPage() {
                     </button>
                     {expandedSection === 'coupon' && (
                       <div className="mt-2 p-4 bg-white border border-gray-200 rounded">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <div className="flex justify-between items-center mb-2">
-                              <label className="font-semibold">Movie</label>
-                              <button className="bg-primary hover:bg-secondary text-white px-3 py-1 rounded text-sm">
-                                Register
-                              </button>
-                            </div>
-                          </div>
-                          <div>
-                            <div className="flex justify-between items-center mb-2">
-                              <label className="font-semibold">Concession</label>
-                              <button className="bg-primary hover:bg-secondary text-white px-3 py-1 rounded text-sm">
-                                Register
-                              </button>
-                            </div>
-                          </div>
+                        {/* Manual Coupon Code Entry */}
+                        <label className="block text-sm font-semibold mb-2">Enter Coupon Code</label>
+                        <div className="flex gap-2 mb-4">
+                          <input
+                            type="text"
+                            value={couponCode}
+                            onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                            disabled={appliedCoupon !== null}
+                            className="border border-gray-300 rounded px-3 py-2 flex-1 uppercase"
+                            placeholder="Enter coupon code"
+                          />
+                          {appliedCoupon ? (
+                            <button
+                              onClick={handleRemoveCoupon}
+                              className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded font-semibold"
+                            >
+                              Remove
+                            </button>
+                          ) : (
+                            <button
+                              onClick={handleApplyCoupon}
+                              disabled={isValidatingCoupon}
+                              className="bg-primary hover:bg-secondary text-white px-6 py-2 rounded font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed"
+                            >
+                              {isValidatingCoupon ? 'Checking...' : 'Apply'}
+                            </button>
+                          )}
                         </div>
+                        
+                        {couponError && (
+                          <p className="text-red-600 text-sm mb-2">{couponError}</p>
+                        )}
+                        
+                        {appliedCoupon && (
+                          <div className="bg-green-50 border border-green-200 rounded p-3 mb-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-semibold text-green-800">✓ Coupon Applied</p>
+                                <p className="text-xs text-green-600">Code: {appliedCoupon.couponCode}</p>
+                              </div>
+                              <p className="text-lg font-bold text-green-700">-₫{appliedCoupon.discountValue.toLocaleString()}</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Available Coupons List */}
+                        {!appliedCoupon && (
+                          <div className="border-t pt-4">
+                            <p className="text-sm font-semibold mb-3">Your Available Coupons</p>
+                            {isLoadingCoupons ? (
+                              <p className="text-sm text-gray-500 text-center py-4">Loading coupons...</p>
+                            ) : availableCoupons.length > 0 ? (
+                              <div className="space-y-2 max-h-60 overflow-y-auto">
+                                {availableCoupons.map((coupon) => (
+                                  <div
+                                    key={coupon.couponId}
+                                    className="border border-gray-200 rounded p-3 hover:border-primary hover:bg-blue-50 cursor-pointer transition-all"
+                                    onClick={() => handleSelectCoupon(coupon)}
+                                  >
+                                    <div className="flex justify-between items-start">
+                                      <div className="flex-1">
+                                        <p className="font-bold text-gray-900">{coupon.couponCode}</p>
+                                        <p className="text-xs text-gray-600 mt-1">
+                                          Type: {coupon.couponType}
+                                        </p>
+                                        {coupon.expiryDate && (
+                                          <p className="text-xs text-gray-500">
+                                            Expires: {new Date(coupon.expiryDate).toLocaleDateString()}
+                                          </p>
+                                        )}
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-lg font-bold text-primary">
+                                          ₫{parseFloat(coupon.balance).toLocaleString()}
+                                        </p>
+                                        <button className="text-xs text-primary hover:underline mt-1">
+                                          Select
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-500 text-center py-4">
+                                No available coupons. Please login or check your account.
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -544,6 +704,12 @@ export default function PaymentPage() {
                     <span className="text-gray-700">Combo</span>
                     <span className="font-semibold text-gray-900">₫{comboTotal.toLocaleString()}</span>
                   </div>
+                  {appliedCoupon && (
+                    <div className="flex justify-between text-sm text-green-600">
+                      <span className="font-semibold">Coupon Discount</span>
+                      <span className="font-semibold">-₫{couponDiscount.toLocaleString()}</span>
+                    </div>
+                  )}
                   <div className="border-t border-gray-300 pt-3 mt-2">
                     <p className="font-bold text-gray-900 text-center">₫{totalPrice.toLocaleString()}</p>
                   </div>
@@ -556,7 +722,13 @@ export default function PaymentPage() {
                   <h3 className="font-bold text-center">Discount</h3>
                 </div>
                 <div className="p-6">
-                  <p className="font-bold text-gray-900 text-center">₫{discount.toFixed(2)}</p>
+                  {appliedCoupon && (
+                    <div className="text-center mb-2">
+                      <p className="text-xs text-gray-600">Coupon: {appliedCoupon.couponCode}</p>
+                      <p className="text-sm text-green-600 font-semibold">-₫{couponDiscount.toLocaleString()}</p>
+                    </div>
+                  )}
+                  <p className="font-bold text-gray-900 text-center">₫{discount.toLocaleString()}</p>
                 </div>
               </div>
 
@@ -632,7 +804,10 @@ export default function PaymentPage() {
                 <p className="text-sm text-gray-300">Combo Price</p>
                 <p className="font-bold">₫{comboTotal.toLocaleString()}</p>
                 <p className="text-sm text-gray-300">Discount</p>
-                <p className="font-bold">₫{discount.toFixed(2)}</p>
+                <p className="font-bold text-green-400">₫{discount.toLocaleString()}</p>
+                {appliedCoupon && (
+                  <p className="text-xs text-gray-400">(Coupon: ₫{couponDiscount.toLocaleString()})</p>
+                )}
                 <p className="text-sm text-gray-300 mt-2">Total</p>
                 <p className="font-bold text-xl text-yellow-400">₫{finalTotal.toLocaleString()}</p>
               </div>
