@@ -16,6 +16,13 @@ export class BookingService {
     const { customerId, showtimeId, seatIds } = dto;
     const seatJson = JSON.stringify(seatIds);
 
+    console.log('=== START BOOKING DEBUG ===');
+    console.log('Customer ID:', customerId);
+    console.log('Showtime ID:', showtimeId);
+    console.log('Seat IDs:', seatIds);
+    console.log('Seat JSON:', seatJson);
+    console.log('===========================');
+
     try {
       await this.dataSource.query(
         'CALL sp_start_booking(?,?,?,@p_booking_id);',

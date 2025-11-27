@@ -399,7 +399,23 @@ export default function BookingPage() {
       }, {});
 
 
-      const seatIds = selectedSeats.map((_, index) => index + 1);
+      // Map selected seat names (e.g., 'H1', 'H2') to actual seat IDs from database
+      const seatIds = selectedSeats.map(seatName => {
+        const seatInfo = apiSeats.find(s => 
+          `${s.row_char}${s.column_number}` === seatName
+        );
+        
+        if (!seatInfo) {
+          console.error(`Seat ${seatName} not found in apiSeats`);
+          console.log('Available seats:', apiSeats);
+          throw new Error(`Seat ${seatName} not found in database`);
+        }
+        
+        return parseInt(seatInfo.id);
+      });
+
+      console.log('Selected seats:', selectedSeats);
+      console.log('Mapped seat IDs:', seatIds);
 
       // Get customer ID from authenticated user
       const userStr = localStorage.getItem('user');
