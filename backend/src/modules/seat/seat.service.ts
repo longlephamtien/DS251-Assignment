@@ -21,7 +21,6 @@ export class SeatService {
      */
     async getSeatsByAuditorium(auNumber: number, auTheaterId: number): Promise<SeatResponseDto[]> {
         try {
-            this.logger.log(`Fetching seats for auditorium ${auNumber} in theater ${auTheaterId}`);
 
             // Execute the stored procedure
             const result = await this.seatRepository.query(
@@ -29,7 +28,6 @@ export class SeatService {
                 [auNumber, auTheaterId],
             );
 
-            this.logger.log(`Raw stored procedure result: ${JSON.stringify(result)}`);
 
             // Handle different result formats (mysql2 returns [[rows], metadata])
             let seats: any[] = [];
@@ -42,7 +40,6 @@ export class SeatService {
             // Filter out OkPacket if it exists
             seats = seats.filter(item => item && typeof item === 'object' && !('fieldCount' in item));
 
-            this.logger.log(`Retrieved ${seats.length} seat(s) from database`);
 
             // Return the seats data as-is from the stored procedure
             return seats as SeatResponseDto[];

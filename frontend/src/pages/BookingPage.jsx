@@ -6,6 +6,7 @@ import { useBooking } from '../context/BookingContext';
 import { startBooking } from '../api/bookingService';
 import { showtimeService } from '../services/showtime.service';
 import { seatService } from '../services/seat.service';
+import { showtimeSeatService } from '../services/showtime_seat.service';
 import { theaterService } from '../services/theater.service';
 import { auditoriumService } from '../services/auditorium.service';
 import { movieService } from '../services/movie.service';
@@ -36,6 +37,7 @@ export default function BookingPage() {
   const movieCombo = bookingData.comboTotal || 0;
   const [isLoading, setIsLoading] = useState(false);
   const [apiSeats, setApiSeats] = useState([]);
+  const [showtimeSeats, setShowtimeSeats] = useState([]);
   const [loadingSeats, setLoadingSeats] = useState(false);
 
   // Fetch showtime and seat data from API
@@ -67,9 +69,7 @@ export default function BookingPage() {
 
           // Fetch movie data
           if (showtimeData.movie_id) {
-            console.log("movieID", parseInt(showtimeData.movie_id))
             movieData = await movieService.getMovieById(parseInt(showtimeData.movie_id));
-            console.log("movieData", movieData);
           }
 
           // Update booking info if we have all data
@@ -88,7 +88,7 @@ export default function BookingPage() {
             setBookingInfo(prev => ({
               ...prev,
               theater: theaterData.name,
-              cinema: `Cinema ${showtimeData.au_number}`,
+              cinema: `Auditorium ${showtimeData.au_number}`,
               remaining: {
                 current: auditoriumData.capacity,
                 total: auditoriumData.capacity
@@ -100,7 +100,7 @@ export default function BookingPage() {
                 ...prev.movie,
                 title: movieData.name,
                 rating: movieData.ageRating,
-                screen: `Cinema ${showtimeData.au_number}`
+                screen: `Auditorium ${showtimeData.au_number}`
               }
             }));
           }
@@ -112,6 +112,18 @@ export default function BookingPage() {
               parseInt(showtimeData.au_theater_id)
             );
             setApiSeats(seats);
+
+            // Fetch showtime seats to get booking status (occupied/held seats)
+            console.log('Showtime id:', showtimeId);
+            console.log('Auditorium number:', showtimeData.au_number);
+            console.log('Theater id:', showtimeData.au_theater_id);
+            const showtimeSeatsData = await showtimeSeatService.getShowtimeSeats(
+              parseInt(showtimeId),
+              showtimeData.au_number,
+              parseInt(showtimeData.au_theater_id)
+            );
+            setShowtimeSeats(showtimeSeatsData);
+            console.log('Showtime seats data:', showtimeSeatsData);
           }
         } catch (error) {
           console.error('Error fetching data:', error);
@@ -239,7 +251,25 @@ export default function BookingPage() {
 
   const total = calculateTotal();
 
-  const occupiedSeats = ['A5', 'B8', 'C3', 'D7', 'E5', 'F9', 'G4', 'H6'];
+  // Calculate occupied seats from showtime seats
+  const occupiedSeats = React.useMemo(() => {
+    if (!showtimeSeats || showtimeSeats.length === 0 || !apiSeats || apiSeats.length === 0) {
+      return [];
+    }
+
+    return showtimeSeats
+      .filter(stSeat => stSeat.status === 'Held' || stSeat.status === 'Sold')
+      .map(stSeat => {
+        // Find corresponding seat in apiSeats to get row and column
+        // Note: stSeat.seat_id is a string, seat.id is a number
+        const seatInfo = apiSeats.find(s => s.id === parseInt(stSeat.seat_id));
+        if (seatInfo) {
+          return `${seatInfo.row_char}${seatInfo.column_number}`;
+        }
+        return null;
+      })
+      .filter(seat => seat !== null);
+  }, [showtimeSeats, apiSeats]);
   const unavailableSeats = ['A1', 'A10', 'M1', 'M10'];
 
   const handleSeatClick = (seat) => {
@@ -366,11 +396,7 @@ export default function BookingPage() {
         return acc;
       }, {});
 
-      // TODO: Map seat names to real seat IDs from backend
-      // Currently using dummy seat IDs for testing
-      // In production, you need to:
-      // 1. Fetch seat map with IDs from backend when page loads
-      // 2. Map selected seat names (e.g., 'A1', 'B2') to their database IDs
+
       const seatIds = selectedSeats.map((_, index) => index + 1);
 
       // Get customer ID from authenticated user

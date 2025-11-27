@@ -11,6 +11,7 @@ import { MovieModule } from './modules/movie/movie.module';
 import { TheaterModule } from './modules/theater/theater.module';
 import { ShowtimeModule } from './modules/showtime/showtime.module';
 import { SeatModule } from './modules/seat/seat.module';
+import { ShowtimeSeatModule } from './modules/showtime_seat/showtime-seat.module';
 import { AuditoriumModule } from './modules/auditorium/auditorium.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { User } from './modules/user/entities/user.entity';
@@ -36,6 +37,7 @@ import { Refund } from './modules/refund/entities/refund.entity';
     TheaterModule,
     ShowtimeModule,
     SeatModule,
+    ShowtimeSeatModule,
     AuditoriumModule,
     ConfigModule.forRoot({
       isGlobal: true,
@@ -86,4 +88,4 @@ import { Refund } from './modules/refund/entities/refund.entity';
   controllers: [AppController, HealthController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }
