@@ -8,4 +8,5 @@ export { transactionService } from './transaction.service';
 export { pointService } from './point.service';
 export { giftService } from './gift.service';
 export { showtimeSeatService } from './showtime_seat.service';
+export { fwbMenuService } from './fwb_menu.service';
 export { default as refundService } from './refund.service';

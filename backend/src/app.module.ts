@@ -27,6 +27,7 @@ import { CouponModule } from './modules/coupon/coupon.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { TransactionModule } from './modules/transaction/transaction.module';
 import { PointModule } from './modules/point/point.module';
+import { FwbMenuModule } from './modules/fwb_menu/fwb-menu.module';
 import { Coupon } from './modules/coupon/entities/coupon.entity';
 import { Booking } from './modules/booking/entities/booking.entity';
 import { Refund } from './modules/refund/entities/refund.entity';
@@ -38,6 +39,7 @@ import { Refund } from './modules/refund/entities/refund.entity';
     ShowtimeModule,
     SeatModule,
     ShowtimeSeatModule,
+    FwbMenuModule,
     AuditoriumModule,
     ConfigModule.forRoot({
       isGlobal: true,

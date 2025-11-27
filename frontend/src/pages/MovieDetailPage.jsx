@@ -359,7 +359,7 @@ function BookingModal({ movie, dates, onClose }) {
     'Tay Ninh',
     'Thai Nguyen',
     'Tien Giang'
-];
+  ];
   const formats = ['2D Vietnam Sub', 'IMAX2D Vietnam Sub', '4DX2D Vietnam Sub', 'SCREENX-2D Vietnam Sub', 'ULTRA 4DX-SCX2D Vietnam Sub'];
 
   // Fetch theaters when city changes

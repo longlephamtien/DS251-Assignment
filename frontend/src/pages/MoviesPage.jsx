@@ -117,6 +117,8 @@ export default function MoviesPage() {
         offset: 0
       });
 
+      console.log('Fetched movies:', data);
+
       setMovies(data);
     } catch (err) {
       console.error('Error fetching movies:', err);
