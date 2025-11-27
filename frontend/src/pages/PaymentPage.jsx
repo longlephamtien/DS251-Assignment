@@ -59,9 +59,9 @@ export default function PaymentPage() {
     type: 'info'
   });
   
-  // Coupon states
+  // Coupon states - Support multiple coupons
   const [couponCode, setCouponCode] = useState('');
-  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [appliedCoupons, setAppliedCoupons] = useState([]); // Changed to array
   const [couponError, setCouponError] = useState('');
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
   const [availableCoupons, setAvailableCoupons] = useState([]);
@@ -155,12 +155,19 @@ export default function PaymentPage() {
       return;
     }
 
+    // Check if coupon already applied
+    if (appliedCoupons.find(c => c.couponCode.toUpperCase() === couponCode.toUpperCase())) {
+      setCouponError('This coupon has already been applied');
+      return;
+    }
+
     setIsValidatingCoupon(true);
     setCouponError('');
 
     try {
       const couponData = await couponService.validateCoupon(couponCode);
-      setAppliedCoupon(couponData);
+      setAppliedCoupons([...appliedCoupons, couponData]);
+      setCouponCode(''); // Clear input after successful apply
       setCouponError('');
       setNotification({
         isOpen: true,
@@ -170,7 +177,6 @@ export default function PaymentPage() {
       });
     } catch (error) {
       setCouponError(error.message);
-      setAppliedCoupon(null);
       setNotification({
         isOpen: true,
         title: 'Coupon Error',
@@ -182,21 +188,32 @@ export default function PaymentPage() {
     }
   };
 
-  const handleRemoveCoupon = () => {
-    setAppliedCoupon(null);
-    setCouponCode('');
+  const handleRemoveCoupon = (couponId) => {
+    setAppliedCoupons(appliedCoupons.filter(c => c.couponId !== couponId));
     setCouponError('');
   };
 
   const handleSelectCoupon = (coupon) => {
-    setCouponCode(coupon.couponCode);
-    setAppliedCoupon({
-      couponId: coupon.couponId,
+    // Check if coupon already applied
+    if (appliedCoupons.find(c => c.couponId === coupon.couponId)) {
+      setNotification({
+        isOpen: true,
+        title: 'Already Applied',
+        message: 'This coupon has already been applied',
+        type: 'warning'
+      });
+      return;
+    }
+
+    const couponData = {
+      couponId: parseInt(coupon.couponId),
       couponCode: coupon.couponCode,
       couponType: coupon.couponType,
       discountValue: parseFloat(coupon.balance) || 0,
       expiryDate: coupon.expiryDate,
-    });
+    };
+    
+    setAppliedCoupons([...appliedCoupons, couponData]);
     setCouponError('');
     setNotification({
       isOpen: true,
@@ -206,7 +223,8 @@ export default function PaymentPage() {
     });
   };
 
-  const couponDiscount = appliedCoupon ? appliedCoupon.discountValue : 0;
+  // Calculate total discount from all applied coupons
+  const couponDiscount = appliedCoupons.reduce((total, coupon) => total + coupon.discountValue, 0);
   const discount = pointsToUse + couponDiscount;
   const finalTotal = Math.max(0, totalPrice - discount);
 
@@ -265,6 +283,32 @@ export default function PaymentPage() {
         finalTotal,
         durationInMinutes
       );
+
+      // Apply all coupons to the booking after successful payment
+      if (appliedCoupons.length > 0) {
+        console.log('🎟️ Applying coupons to booking:', appliedCoupons.map(c => c.couponId));
+        try {
+          for (const coupon of appliedCoupons) {
+            console.log('🎟️ Applying coupon:', coupon.couponId, 'to booking:', currentBookingId);
+            const result = await couponService.applyCoupon(parseInt(currentBookingId), coupon.couponId);
+            console.log('✅ Coupon applied successfully:', result);
+          }
+          console.log('🎟️ All coupons applied, reloading coupon list...');
+          // Reload available coupons after applying to refresh the list
+          try {
+            const couponsData = await couponService.getMyCoupons();
+            const available = couponsData.coupons.filter(c => c.state === 'Available');
+            console.log('✅ Reloaded coupons, available count:', available.length);
+            setAvailableCoupons(available);
+          } catch (reloadError) {
+            console.error('❌ Failed to reload coupons:', reloadError);
+          }
+        } catch (couponError) {
+          console.error('❌ Failed to apply coupons to booking:', couponError);
+          // Payment already succeeded, so just log the error
+          // Coupons might need manual intervention
+        }
+      }
 
       // Show success notification
       setNotification({
@@ -379,48 +423,48 @@ export default function PaymentPage() {
                             type="text"
                             value={couponCode}
                             onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                            disabled={appliedCoupon !== null}
                             className="border border-gray-300 rounded px-3 py-2 flex-1 uppercase"
                             placeholder="Enter coupon code"
                           />
-                          {appliedCoupon ? (
-                            <button
-                              onClick={handleRemoveCoupon}
-                              className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded font-semibold"
-                            >
-                              Remove
-                            </button>
-                          ) : (
-                            <button
-                              onClick={handleApplyCoupon}
-                              disabled={isValidatingCoupon}
-                              className="bg-primary hover:bg-secondary text-white px-6 py-2 rounded font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed"
-                            >
-                              {isValidatingCoupon ? 'Checking...' : 'Apply'}
-                            </button>
-                          )}
+                          <button
+                            onClick={handleApplyCoupon}
+                            disabled={isValidatingCoupon}
+                            className="bg-primary hover:bg-secondary text-white px-6 py-2 rounded font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed"
+                          >
+                            {isValidatingCoupon ? 'Checking...' : 'Apply'}
+                          </button>
                         </div>
                         
                         {couponError && (
                           <p className="text-red-600 text-sm mb-2">{couponError}</p>
                         )}
                         
-                        {appliedCoupon && (
-                          <div className="bg-green-50 border border-green-200 rounded p-3 mb-4">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-sm font-semibold text-green-800">✓ Coupon Applied</p>
-                                <p className="text-xs text-green-600">Code: {appliedCoupon.couponCode}</p>
+                        {/* Applied Coupons List */}
+                        {appliedCoupons.length > 0 && (
+                          <div className="mb-4 space-y-2">
+                            <p className="text-sm font-semibold">Applied Coupons ({appliedCoupons.length})</p>
+                            {appliedCoupons.map((coupon) => (
+                              <div key={coupon.couponId} className="bg-green-50 border border-green-200 rounded p-3">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex-1">
+                                    <p className="text-sm font-semibold text-green-800">✓ {coupon.couponCode}</p>
+                                    <p className="text-xs text-green-600">Discount: ₫{coupon.discountValue.toLocaleString()}</p>
+                                  </div>
+                                  <button
+                                    onClick={() => handleRemoveCoupon(coupon.couponId)}
+                                    className="text-red-600 hover:text-red-800 text-sm font-semibold"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
                               </div>
-                              <p className="text-lg font-bold text-green-700">-₫{appliedCoupon.discountValue.toLocaleString()}</p>
-                            </div>
+                            ))}
                           </div>
                         )}
 
                         {/* Available Coupons List */}
-                        {!appliedCoupon && (
-                          <div className="border-t pt-4">
-                            <p className="text-sm font-semibold mb-3">Your Available Coupons</p>
+                        <div className="border-t pt-4">
+                          <p className="text-sm font-semibold mb-3">Your Available Coupons</p>
                             {isLoadingCoupons ? (
                               <p className="text-sm text-gray-500 text-center py-4">Loading coupons...</p>
                             ) : availableCoupons.length > 0 ? (
@@ -460,8 +504,7 @@ export default function PaymentPage() {
                                 No available coupons. Please login or check your account.
                               </p>
                             )}
-                          </div>
-                        )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -704,9 +747,9 @@ export default function PaymentPage() {
                     <span className="text-gray-700">Combo</span>
                     <span className="font-semibold text-gray-900">₫{comboTotal.toLocaleString()}</span>
                   </div>
-                  {appliedCoupon && (
+                  {appliedCoupons.length > 0 && (
                     <div className="flex justify-between text-sm text-green-600">
-                      <span className="font-semibold">Coupon Discount</span>
+                      <span className="font-semibold">Coupon Discount ({appliedCoupons.length})</span>
                       <span className="font-semibold">-₫{couponDiscount.toLocaleString()}</span>
                     </div>
                   )}
@@ -722,10 +765,14 @@ export default function PaymentPage() {
                   <h3 className="font-bold text-center">Discount</h3>
                 </div>
                 <div className="p-6">
-                  {appliedCoupon && (
+                  {appliedCoupons.length > 0 && (
                     <div className="text-center mb-2">
-                      <p className="text-xs text-gray-600">Coupon: {appliedCoupon.couponCode}</p>
-                      <p className="text-sm text-green-600 font-semibold">-₫{couponDiscount.toLocaleString()}</p>
+                      <p className="text-xs text-gray-600">Coupons Applied: {appliedCoupons.length}</p>
+                      {appliedCoupons.map((coupon, index) => (
+                        <p key={index} className="text-xs text-green-600">
+                          {coupon.couponCode}: -₫{coupon.discountValue.toLocaleString()}
+                        </p>
+                      ))}
                     </div>
                   )}
                   <p className="font-bold text-gray-900 text-center">₫{discount.toLocaleString()}</p>
@@ -805,8 +852,8 @@ export default function PaymentPage() {
                 <p className="font-bold">₫{comboTotal.toLocaleString()}</p>
                 <p className="text-sm text-gray-300">Discount</p>
                 <p className="font-bold text-green-400">₫{discount.toLocaleString()}</p>
-                {appliedCoupon && (
-                  <p className="text-xs text-gray-400">(Coupon: ₫{couponDiscount.toLocaleString()})</p>
+                {appliedCoupons.length > 0 && (
+                  <p className="text-xs text-gray-400">({appliedCoupons.length} Coupon{appliedCoupons.length > 1 ? 's' : ''}: ₫{couponDiscount.toLocaleString()})</p>
                 )}
                 <p className="text-sm text-gray-300 mt-2">Total</p>
                 <p className="font-bold text-xl text-yellow-400">₫{finalTotal.toLocaleString()}</p>

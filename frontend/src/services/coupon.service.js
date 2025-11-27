@@ -58,7 +58,7 @@ const validateCoupon = async (couponCode) => {
     }
 
     return {
-        couponId: coupon.couponId,
+        couponId: parseInt(coupon.couponId),
         couponCode: coupon.couponCode,
         couponType: coupon.couponType,
         discountValue: parseFloat(coupon.balance) || 0,

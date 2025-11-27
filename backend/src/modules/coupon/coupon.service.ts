@@ -75,37 +75,24 @@ export class CouponService {
   async applyCoupon(customerId: number, applyCouponDto: ApplyCouponDto) {
     const { bookingId, couponId } = applyCouponDto;
 
-    // Call stored procedure
-    await this.dataSource.query(
-      'CALL sp_apply_coupon(?, ?, ?, @p_success, @p_message)',
-      [bookingId, couponId, customerId]
-    );
+    try {
+      // Call stored procedure (will throw error via SIGNAL SQLSTATE if validation fails)
+      await this.dataSource.query(
+        'CALL sp_apply_coupon(?, ?, ?)',
+        [bookingId, couponId, customerId]
+      );
 
-    // Get output parameters
-    const result = await this.dataSource.query(
-      'SELECT @p_success as success, @p_message as message'
-    );
-    const output = result[0];
-
-    // MySQL OUT parameter returns STRING: '1' = success, '0' = error
-    if (output.success === '0' || output.success === 0 || !output.success) {
-      throw new BadRequestException(output.message || 'Apply coupon failed');
+      // If we reach here, coupon was successfully deleted
+      return {
+        bookingId,
+        couponId,
+        message: 'Coupon applied and deleted successfully',
+        appliedAt: new Date(),
+      };
+    } catch (error) {
+      // Stored procedure throws SIGNAL SQLSTATE '45000' with custom message
+      throw new BadRequestException(error.message || 'Apply coupon failed');
     }
-
-    // Get coupon details
-    const couponResult = await this.dataSource.query(
-      'SELECT balance, coupon_type FROM coupon WHERE id = ?',
-      [couponId]
-    );
-    const couponInfo = couponResult[0];
-
-    return {
-      bookingId,
-      couponId,
-      balance: couponInfo?.balance,
-      couponType: couponInfo?.coupon_type,
-      appliedAt: new Date(),
-    };
   }
 
   /**
