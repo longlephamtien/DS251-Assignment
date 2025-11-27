@@ -4,12 +4,12 @@ import Icon from '../components/common/Icon';
 import Notification from '../components/common/Notification';
 import { useBooking } from '../context/BookingContext';
 import { confirmPayment, cancelPayment, generateTransactionId } from '../api/bookingService';
-import atmLogo from '../assets/atm-logo.png';
-import visaMasterLogo from '../assets/visa-mastercard-logo.png';
-import momoLogo from '../assets/momo-logo.png';
-import zalopayLogo from '../assets/zalopay-logo.png';
-import vnpayLogo from '../assets/vnpay-logo.png';
-import shopeepayLogo from '../assets/shopeepay-logo.png';
+import atmLogo from '../assets/media/payment/atm-logo.png';
+import visaMasterLogo from '../assets/media/payment/visa-mastercard-logo.png';
+import momoLogo from '../assets/media/payment/momo-logo.png';
+import zalopayLogo from '../assets/media/payment/zalopay-logo.png';
+import vnpayLogo from '../assets/media/payment/vnpay-logo.png';
+import shopeepayLogo from '../assets/media/payment/shopeepay-logo.png';
 
 export default function PaymentPage() {
   const { date } = useParams();

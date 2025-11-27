@@ -7,6 +7,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { HealthController } from './health/health.controller';
+import { MovieModule } from './modules/movie/movie.module';
+import { TheaterModule } from './modules/theater/theater.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { User } from './modules/user/entities/user.entity';
 import { Customer } from './modules/user/entities/customer.entity';
@@ -23,6 +25,8 @@ import { Refund } from './modules/refund/entities/refund.entity';
 
 @Module({
   imports: [
+    MovieModule,
+    TheaterModule,
     ConfigModule.forRoot({
       isGlobal: true,
       load: [appConfig, databaseConfig, jwtConfig],
