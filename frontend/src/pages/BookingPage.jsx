@@ -4,6 +4,11 @@ import Icon from '../components/common/Icon';
 import Notification from '../components/common/Notification';
 import { useBooking } from '../context/BookingContext';
 import { startBooking } from '../api/bookingService';
+import { showtimeService } from '../services/showtime.service';
+import { seatService } from '../services/seat.service';
+import { theaterService } from '../services/theater.service';
+import { auditoriumService } from '../services/auditorium.service';
+import { movieService } from '../services/movie.service';
 
 export default function BookingPage() {
   const { theaterId, showtimeId, date } = useParams();
@@ -12,7 +17,7 @@ export default function BookingPage() {
   const { bookingData, updateBookingData } = useBooking();
 
   // Sample booking data - would come from API based on URL params
-  const [bookingInfo] = useState({
+  const [bookingInfo, setBookingInfo] = useState({
     theater: 'BKinema Hùng Vương Plaza',
     cinema: 'Cinema 5',
     remaining: { current: 134, total: 134 },
@@ -30,6 +35,95 @@ export default function BookingPage() {
   const [selectedSeats, setSelectedSeats] = useState(bookingData.selectedSeats || []);
   const movieCombo = bookingData.comboTotal || 0;
   const [isLoading, setIsLoading] = useState(false);
+  const [apiSeats, setApiSeats] = useState([]);
+  const [loadingSeats, setLoadingSeats] = useState(false);
+
+  // Fetch showtime and seat data from API
+  useEffect(() => {
+    const fetchShowtimeAndSeats = async () => {
+      if (showtimeId) {
+        try {
+          setLoadingSeats(true);
+
+          let theaterData = null;
+          let auditoriumData = null;
+          let movieData = null;
+
+          // Fetch showtime data
+          const showtimeData = await showtimeService.getShowtimeById(showtimeId);
+
+          // Fetch theater data
+          if (theaterId) {
+            theaterData = await theaterService.getTheaterById(parseInt(theaterId));
+          }
+
+          // Fetch auditorium data
+          if (showtimeData.au_number && showtimeData.au_theater_id) {
+            auditoriumData = await auditoriumService.getAuditoriumById(
+              showtimeData.au_number,
+              parseInt(showtimeData.au_theater_id)
+            );
+          }
+
+          // Fetch movie data
+          if (showtimeData.movie_id) {
+            console.log("movieID", parseInt(showtimeData.movie_id))
+            movieData = await movieService.getMovieById(parseInt(showtimeData.movie_id));
+            console.log("movieData", movieData);
+          }
+
+          // Update booking info if we have all data
+          if (showtimeData && theaterData && auditoriumData) {
+            // Format date
+            const dateObj = new Date(showtimeData.date);
+            const formattedDate = `${dateObj.getDate().toString().padStart(2, '0')}/${(dateObj.getMonth() + 1).toString().padStart(2, '0')}/${dateObj.getFullYear()}`;
+
+            // Format times
+            const formatTime = (timeStr) => {
+              if (!timeStr) return '';
+              const [hours, minutes] = timeStr.split(':');
+              return `${hours}:${minutes}`;
+            };
+
+            setBookingInfo(prev => ({
+              ...prev,
+              theater: theaterData.name,
+              cinema: `Cinema ${showtimeData.au_number}`,
+              remaining: {
+                current: auditoriumData.capacity,
+                total: auditoriumData.capacity
+              },
+              showtime: formatTime(showtimeData.start_time),
+              date: formattedDate,
+              endTime: formatTime(showtimeData.end_time),
+              movie: {
+                ...prev.movie,
+                title: movieData.name,
+                rating: movieData.ageRating,
+                screen: `Cinema ${showtimeData.au_number}`
+              }
+            }));
+          }
+
+          // Fetch seats using au_number and au_theater_id from showtime
+          if (showtimeData.au_number && showtimeData.au_theater_id) {
+            const seats = await seatService.getSeatsByAuditorium(
+              showtimeData.au_number,
+              parseInt(showtimeData.au_theater_id)
+            );
+            setApiSeats(seats);
+          }
+        } catch (error) {
+          console.error('Error fetching data:', error);
+        } finally {
+          setLoadingSeats(false);
+        }
+      }
+    };
+
+    fetchShowtimeAndSeats();
+  }, [showtimeId, theaterId]);
+
 
   // Load persisted state from location or context
   useEffect(() => {
@@ -72,8 +166,34 @@ export default function BookingPage() {
     type: 'info'
   });
 
-  // Seat map data
-  const seatRows = [
+  // Transform API seats into UI format
+  const transformSeatsToRows = (seats) => {
+    if (!seats || seats.length === 0) return [];
+
+    // Group seats by row
+    const seatsByRow = seats.reduce((acc, seat) => {
+      if (!acc[seat.row_char]) {
+        acc[seat.row_char] = [];
+      }
+      acc[seat.row_char].push(seat);
+      return acc;
+    }, {});
+
+    // Convert to array format expected by UI
+    return Object.entries(seatsByRow).map(([row, rowSeats]) => {
+      // Sort by column number
+      const sortedSeats = rowSeats.sort((a, b) => a.column_number - b.column_number);
+
+      return {
+        row: row,
+        seats: sortedSeats.map(s => `${s.row_char}${s.column_number}`),
+        type: sortedSeats[0].type.toLowerCase()
+      };
+    }).sort((a, b) => a.row.localeCompare(b.row));
+  };
+
+  // Use API seats if available, otherwise use dummy data
+  const seatRows = apiSeats.length > 0 ? transformSeatsToRows(apiSeats) : [
     { row: 'A', seats: ['A10', 'A9', 'A8', 'A7', 'A6', 'A5', 'A4', 'A3', 'A2', 'A1'], type: 'standard' },
     { row: 'B', seats: ['B12', 'B11', 'B10', 'B9', 'B8', 'B7', 'B6', 'B5', 'B4', 'B3', 'B2', 'B1'], type: 'standard' },
     { row: 'C', seats: ['C12', 'C11', 'C10', 'C9', 'C8', 'C7', 'C6', 'C5', 'C4', 'C3', 'C2', 'C1'], type: 'standard' },
@@ -89,12 +209,20 @@ export default function BookingPage() {
     { row: 'M', seats: ['M10', 'M9', 'M8', 'M7', 'M6', 'M5', 'M4', 'M3', 'M2', 'M1'], type: 'sweetbox' }
   ];
 
-  // Seat pricing
-  const SEAT_PRICES = {
-    standard: 75000,
-    vip: 100000,
-    sweetbox: 150000
-  };
+  // Build dynamic seat prices from API data
+  const SEAT_PRICES = apiSeats.length > 0
+    ? apiSeats.reduce((acc, seat) => {
+      const type = seat.type.toLowerCase();
+      if (!acc[type]) {
+        acc[type] = parseFloat(seat.price);
+      }
+      return acc;
+    }, {})
+    : {
+      standard: 75000,
+      vip: 100000,
+      sweetbox: 150000
+    };
 
   // Calculate total based on selected seats
   const calculateTotal = () => {
@@ -452,16 +580,16 @@ export default function BookingPage() {
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Notification Modal */}
-      <Notification
-        isOpen={notification.isOpen}
-        onClose={() => setNotification({ ...notification, isOpen: false })}
-        title={notification.title}
-        message={notification.message}
-        type={notification.type}
-      />
+        {/* Notification Modal */}
+        <Notification
+          isOpen={notification.isOpen}
+          onClose={() => setNotification({ ...notification, isOpen: false })}
+          title={notification.title}
+          message={notification.message}
+          type={notification.type}
+        />
+      </div>
     </div>
   );
 }

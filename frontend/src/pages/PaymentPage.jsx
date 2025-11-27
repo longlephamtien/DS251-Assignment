@@ -58,6 +58,9 @@ export default function PaymentPage() {
     type: 'info'
   });
 
+
+  console.log("Booking Data:", bookingData);
+
   const toggleSection = (sectionId) => {
     setExpandedSection(expandedSection === sectionId ? null : sectionId);
   };
