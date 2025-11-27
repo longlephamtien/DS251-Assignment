@@ -1056,15 +1056,15 @@ const BookingHistoryTab = () => {
                         <p className="font-mono font-bold text-text-main text-lg">#{booking.id}</p>
                       </div>
                       <span className={`px-4 py-2 rounded-full text-sm font-semibold ${booking.status === 'Paid' ? 'bg-green-100 text-green-700' :
-                          booking.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' :
-                            booking.status === 'Cancelled' ? 'bg-red-100 text-red-700' :
-                              'bg-gray-100 text-gray-700'
+                        booking.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' :
+                          booking.status === 'Cancelled' ? 'bg-red-100 text-red-700' :
+                            'bg-gray-100 text-gray-700'
                         }`}>
                         {booking.status}
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                       <div>
                         <p className="text-sm text-text-sub mb-1">Movie</p>
                         <p className="font-semibold text-text-main">{booking.movieTitle || 'N/A'}</p>
@@ -1074,6 +1074,18 @@ const BookingHistoryTab = () => {
                         <p className="text-text-main">{booking.showtime || 'N/A'}</p>
                       </div>
                       <div>
+                        <p className="text-sm text-text-sub mb-1">Theater</p>
+                        <p className="font-semibold text-text-main">{booking.theaterName || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-text-sub mb-1">Auditorium</p>
+                        <p className="font-semibold text-text-main">Auditorium {booking.auditoriumNumber || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-text-sub mb-1">Seats</p>
+                        <p className="font-semibold text-primary">{booking.seatNames || 'N/A'}</p>
+                      </div>
+                      <div className="md:col-span-2 lg:col-span-3">
                         <p className="text-sm text-text-sub mb-1">Total Amount</p>
                         <p className="font-bold text-accent text-lg">{(booking.totalAmount || 0).toLocaleString()} VND</p>
                       </div>
@@ -1082,7 +1094,7 @@ const BookingHistoryTab = () => {
                     <div className="flex items-center justify-between pt-4 border-t border-gray-200">
                       <div className="text-sm text-text-sub">
                         <Icon name="clock" className="inline mr-1" />
-                        Booked: {new Date(booking.createdAt).toLocaleString()}
+                        Booked: {booking.createdAt}
                       </div>
                       <div className="flex gap-2">
                         {booking.status === 'Paid' && (
@@ -1170,7 +1182,7 @@ const BookingHistoryTab = () => {
                 </div>
                 <div className="flex-1">
                   <h3 className="text-2xl font-bold mb-1">{ticketModal.booking?.movieTitle || 'Movie Title'}</h3>
-                  <p className="text-sm opacity-90">BKinema Cinema</p>
+                  <p className="text-sm opacity-90">{ticketModal.booking?.theaterName || 'BKinema Cinema'}</p>
                 </div>
               </div>
             </div>
@@ -1212,12 +1224,12 @@ const BookingHistoryTab = () => {
                     <p className="font-bold text-pink-600">{ticketModal.booking?.showtime || 'N/A'}</p>
                   </div>
                   <div>
-                    <p className="text-gray-500 mb-1">Cinema</p>
-                    <p className="font-bold">Cinema 5</p>
+                    <p className="text-gray-500 mb-1">Auditorium</p>
+                    <p className="font-bold">Auditorium {ticketModal.booking?.auditoriumNumber || 'N/A'}</p>
                   </div>
                   <div>
                     <p className="text-gray-500 mb-1">Seats</p>
-                    <p className="font-bold">To be assigned</p>
+                    <p className="font-bold">{ticketModal.booking?.seatNames || 'N/A'}</p>
                   </div>
                   <div>
                     <p className="text-gray-500 mb-1">Total</p>
