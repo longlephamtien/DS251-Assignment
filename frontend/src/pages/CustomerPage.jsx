@@ -1,23 +1,47 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../components/common/Icon';
 import Notification from '../components/common/Notification';
-import { authService } from '../services';
+import MembershipCard from '../components/MembershipCard';
+import { authService, membershipService, dashboardService, couponService, transactionService, pointService, giftService } from '../services';
 
 // Tab Components
 const DashboardTab = () => {
-  const stats = [
-    { label: 'Total Points', value: '1,250', icon: 'star', color: 'text-accent' },
-    { label: 'Gift Cards', value: '2', icon: 'gift', color: 'text-primary' },
-    { label: 'Vouchers', value: '5', icon: 'ticket', color: 'text-secondary' },
-    { label: 'Total Bookings', value: '18', icon: 'film', color: 'text-accent' },
-  ];
+  const [stats, setStats] = useState(null);
+  const [activities, setActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const recentActivities = [
-    { date: '2024-11-20', action: 'Booked movie ticket', details: 'Avengers: Endgame - 2 tickets' },
-    { date: '2024-11-15', action: 'Redeemed voucher', details: '50% off combo' },
-    { date: '2024-11-10', action: 'Earned points', details: '+100 points from booking' },
-  ];
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      const data = await dashboardService.getDashboard();
+      setStats(data.stats);
+      setActivities(data.recentActivities);
+    } catch (error) {
+      console.error('Failed to fetch dashboard:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="text-center py-12">
+        <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  const statItems = stats ? [
+    { label: 'Total Points', value: stats.totalPoints.toLocaleString(), icon: 'star', color: 'text-accent' },
+    { label: 'Gift Cards', value: stats.totalGiftCards, icon: 'gift', color: 'text-primary' },
+    { label: 'Vouchers', value: stats.totalVouchers, icon: 'ticket', color: 'text-secondary' },
+    { label: 'Total Bookings', value: stats.totalBookings, icon: 'film', color: 'text-accent' },
+  ] : [];
 
   return (
     <div className="space-y-6">
@@ -25,7 +49,7 @@ const DashboardTab = () => {
         DASHBOARD
       </h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat, index) => (
+        {statItems.map((stat, index) => (
           <div key={index} className="bg-white rounded-lg shadow-card p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -41,15 +65,21 @@ const DashboardTab = () => {
       <div className="bg-white rounded-lg shadow-card p-6">
         <h3 className="text-xl font-bold text-primary mb-4">Recent Activities</h3>
         <div className="space-y-4">
-          {recentActivities.map((activity, index) => (
-            <div key={index} className="flex items-start border-b border-gray-200 pb-4 last:border-0">
-              <div className="flex-shrink-0 w-24 text-text-sub text-sm">{activity.date}</div>
-              <div className="flex-1">
-                <p className="font-semibold text-text-main">{activity.action}</p>
-                <p className="text-text-sub text-sm">{activity.details}</p>
+          {activities.length > 0 ? (
+            activities.map((activity, index) => (
+              <div key={index} className="flex items-start border-b border-gray-200 pb-4 last:border-0">
+                <div className="flex-shrink-0 w-24 text-text-sub text-sm">
+                  {new Date(activity.date).toLocaleDateString()}
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-text-main">{activity.type}: {activity.description}</p>
+                  <p className="text-text-sub text-sm">{activity.details}</p>
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          ) : (
+            <p className="text-center text-text-sub py-4">No recent activities</p>
+          )}
         </div>
       </div>
     </div>
@@ -96,20 +126,12 @@ const AccountDetailsTab = () => {
     return gender;
   };
 
-  useEffect(() => {
-    if (!authService.isAuthenticated()) {
-      navigate('/login');
-      return;
-    }
-    loadProfile();
-  }, [navigate]);
-
-  const loadProfile = async () => {
+  const loadProfile = useCallback(async () => {
     try {
       setProfileLoading(true);
       const data = await authService.getProfile();
       setProfile(data);
-      
+
       setFormData({
         fname: data.fname || '',
         minit: data.minit || '',
@@ -136,7 +158,15 @@ const AccountDetailsTab = () => {
     } finally {
       setProfileLoading(false);
     }
-  };
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!authService.isAuthenticated()) {
+      navigate('/login');
+      return;
+    }
+    loadProfile();
+  }, [navigate, loadProfile]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -231,7 +261,7 @@ const AccountDetailsTab = () => {
         newPassword: '',
         confirmPassword: '',
       }));
-      
+
       await loadProfile();
     } catch (err) {
       console.error('Update error:', err);
@@ -263,7 +293,7 @@ const AccountDetailsTab = () => {
         message={notification.message}
         type={notification.type}
       />
-      
+
       <h2 className="text-2xl font-bold text-center bg-primary text-white py-4 -mx-8 -mt-8 mb-8">
         EDIT ACCOUNT DETAIL
       </h2>
@@ -355,7 +385,7 @@ const AccountDetailsTab = () => {
           <div>
             <label className="block text-text-main font-semibold mb-2">Date of Birth</label>
             <p className="text-text-main">
-              {profile?.birthday 
+              {profile?.birthday
                 ? new Date(profile.birthday).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).toUpperCase()
                 : 'Not set'}
             </p>
@@ -464,13 +494,13 @@ const AccountDetailsTab = () => {
 
       {/* Actions */}
       <div className="flex justify-between items-center mt-8">
-        <button 
+        <button
           onClick={() => navigate('/')}
           className="text-primary hover:underline"
         >
           « Back
         </button>
-        <button 
+        <button
           onClick={handleSave}
           disabled={loading}
           className="bg-primary hover:bg-secondary text-white font-bold py-3 px-8 rounded disabled:opacity-50 disabled:cursor-not-allowed"
@@ -484,12 +514,40 @@ const AccountDetailsTab = () => {
 };
 
 const PointTab = () => {
-  const pointHistory = [
-    { date: '2024-11-20', description: 'Booking #12345', points: '+100', balance: '1,250' },
-    { date: '2024-11-15', description: 'Redeemed voucher', points: '-50', balance: '1,150' },
-    { date: '2024-11-10', description: 'Booking #12344', points: '+120', balance: '1,200' },
-    { date: '2024-11-05', description: 'Membership bonus', points: '+200', balance: '1,080' },
-  ];
+  const [totalPoints, setTotalPoints] = useState(0);
+  const [pointHistory, setPointHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchPoints();
+  }, []);
+
+  const fetchPoints = async () => {
+    try {
+      setLoading(true);
+      const data = await pointService.getMyPoints();
+      setTotalPoints(data.totalPoints || 0);
+      setPointHistory(data.history || []);
+    } catch (error) {
+      console.error('Failed to fetch points:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-CA'); // YYYY-MM-DD format
+  };
+
+  if (loading) {
+    return (
+      <div className="text-center py-12">
+        <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -499,7 +557,7 @@ const PointTab = () => {
       <div className="bg-gradient-to-r from-primary to-secondary rounded-lg shadow-card p-8 text-white">
         <div className="text-center">
           <p className="text-lg mb-2">Total Points</p>
-          <p className="text-5xl font-bold">1,250</p>
+          <p className="text-5xl font-bold">{totalPoints.toLocaleString()}</p>
           <p className="mt-4">Keep earning to unlock more rewards!</p>
         </div>
       </div>
@@ -517,16 +575,24 @@ const PointTab = () => {
               </tr>
             </thead>
             <tbody>
-              {pointHistory.map((record, index) => (
-                <tr key={index} className="border-b border-gray-200 hover:bg-background">
-                  <td className="py-3 px-4 text-text-sub">{record.date}</td>
-                  <td className="py-3 px-4 text-text-main">{record.description}</td>
-                  <td className={`py-3 px-4 text-right font-semibold ${record.points.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
-                    {record.points}
+              {pointHistory.length > 0 ? (
+                pointHistory.map((record, index) => (
+                  <tr key={index} className="border-b border-gray-200 hover:bg-background">
+                    <td className="py-3 px-4 text-text-sub">{formatDate(record.date)}</td>
+                    <td className="py-3 px-4 text-text-main">{record.description}</td>
+                    <td className={`py-3 px-4 text-right font-semibold ${record.points.toString().startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
+                      {record.points}
+                    </td>
+                    <td className="py-3 px-4 text-right text-text-main">{record.balance}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="4" className="py-8 text-center text-text-sub">
+                    No point history found
                   </td>
-                  <td className="py-3 px-4 text-right text-text-main">{record.balance}</td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
@@ -536,10 +602,44 @@ const PointTab = () => {
 };
 
 const GiftCardTab = () => {
-  const giftCards = [
-    { code: 'GC-2024-001', value: '500,000 VND', balance: '350,000 VND', expiryDate: '2025-12-31', status: 'Active' },
-    { code: 'GC-2024-002', value: '200,000 VND', balance: '200,000 VND', expiryDate: '2025-06-30', status: 'Active' },
-  ];
+  const [giftCards, setGiftCards] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState({ total: 0, totalBalance: 0 });
+
+  useEffect(() => {
+    fetchGiftCards();
+  }, []);
+
+  const fetchGiftCards = async () => {
+    try {
+      setLoading(true);
+      const data = await giftService.getMyGiftCards();
+      setGiftCards(data.giftCards || []);
+      setSummary(data.summary || { total: 0, totalBalance: 0 });
+    } catch (error) {
+      console.error('Failed to fetch gift cards:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-CA'); // YYYY-MM-DD format
+  };
+
+  if (loading) {
+    return (
+      <div className="text-center py-12">
+        <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -548,177 +648,184 @@ const GiftCardTab = () => {
       </h2>
       <div className="flex justify-between items-center">
         <h3 className="text-xl font-bold text-primary">My Gift Cards</h3>
-        <button className="bg-accent hover:bg-orange-600 text-white font-bold py-2 px-6 rounded">
-          Buy Gift Card
-        </button>
+        <div className="text-right">
+          <p className="text-sm text-text-sub">Total Balance</p>
+          <p className="text-xl font-bold text-primary">{formatCurrency(summary.totalBalance)}</p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {giftCards.map((card, index) => (
-          <div key={index} className="bg-gradient-to-br from-primary to-secondary rounded-lg shadow-card p-6 text-white">
-            <div className="flex items-center justify-between mb-4">
-              <Icon name="gift" className="text-3xl" />
-              <span className="bg-white text-primary text-xs font-bold px-3 py-1 rounded-full">
-                {card.status}
-              </span>
-            </div>
-            <p className="text-sm opacity-90 mb-1">Gift Card</p>
-            <p className="text-2xl font-bold mb-4">{card.code}</p>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="opacity-90">Original Value</p>
-                <p className="font-bold">{card.value}</p>
+      {giftCards.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {giftCards.map((card, index) => (
+            <div key={index} className="bg-gradient-to-br from-primary to-secondary rounded-lg shadow-card p-6 text-white">
+              <div className="flex items-center justify-between mb-4">
+                <Icon name="gift" className="text-3xl" />
+                <span className={`text-xs font-bold px-3 py-1 rounded-full ${
+                  card.status === 'active' ? 'bg-green-500 text-white' : 
+                  card.status === 'expired' ? 'bg-red-500 text-white' : 
+                  'bg-gray-500 text-white'
+                }`}>
+                  {card.status.toUpperCase()}
+                </span>
               </div>
-              <div>
-                <p className="opacity-90">Balance</p>
-                <p className="font-bold">{card.balance}</p>
+              <p className="text-sm opacity-90 mb-1">Gift Card</p>
+              <p className="text-2xl font-bold mb-2">{card.giftCardId}</p>
+              <p className="text-sm opacity-90 mb-4">From: {card.senderName}</p>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="opacity-90">Original Value</p>
+                  <p className="font-bold">{formatCurrency(card.originalBalance)}</p>
+                </div>
+                <div>
+                  <p className="opacity-90">Balance</p>
+                  <p className="font-bold">{formatCurrency(card.balance)}</p>
+                </div>
+              </div>
+              <div className="mt-4 pt-4 border-t border-white border-opacity-30">
+                <p className="text-sm opacity-90">Expires: {formatDate(card.expiryDate)}</p>
               </div>
             </div>
-            <div className="mt-4 pt-4 border-t border-white border-opacity-30">
-              <p className="text-sm opacity-90">Expires: {card.expiryDate}</p>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="bg-white rounded-lg shadow-card p-12 text-center">
+          <Icon name="gift" className="text-6xl text-gray-300 mb-4 mx-auto" />
+          <p className="text-text-sub">No gift cards found</p>
+        </div>
+      )}
     </div>
   );
 };
 
 const VoucherTab = () => {
-  const vouchers = [
-    { code: 'COMBO50', title: '50% Off Combo', description: 'Get 50% discount on any combo', expiryDate: '2024-12-31', status: 'Available' },
-    { code: 'WEEKEND20', title: '20% Off Weekend', description: 'Weekend special discount', expiryDate: '2024-11-30', status: 'Available' },
-    { code: 'POPCORN', title: 'Free Popcorn', description: 'Free medium popcorn with ticket', expiryDate: '2024-12-15', status: 'Available' },
-    { code: 'STUDENT', title: 'Student Discount', description: '15% off for students', expiryDate: '2024-12-31', status: 'Used' },
-    { code: 'BIRTHDAY', title: 'Birthday Special', description: 'Free ticket on your birthday month', expiryDate: '2024-12-31', status: 'Available' },
-  ];
+  const [coupons, setCoupons] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState({ available: 0, used: 0, expired: 0 });
+
+  useEffect(() => {
+    fetchCoupons();
+  }, []);
+
+  const fetchCoupons = async () => {
+    try {
+      setLoading(true);
+      const data = await couponService.getMyCoupons();
+      setCoupons(data.coupons || []);
+      setSummary(data.summary || { available: 0, used: 0, expired: 0 });
+    } catch (error) {
+      console.error('Failed to fetch coupons:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="text-center py-12">
+        <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-center bg-primary text-white py-4 px-8 rounded-lg mb-6">
         VOUCHER
       </h2>
+
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+          <p className="text-green-600 text-2xl font-bold">{summary.available}</p>
+          <p className="text-green-700 text-sm">Available</p>
+        </div>
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
+          <p className="text-gray-600 text-2xl font-bold">{summary.used}</p>
+          <p className="text-gray-700 text-sm">Used</p>
+        </div>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+          <p className="text-red-600 text-2xl font-bold">{summary.expired}</p>
+          <p className="text-red-700 text-sm">Expired</p>
+        </div>
+      </div>
+
       <h3 className="text-xl font-bold text-primary">My Vouchers</h3>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {vouchers.map((voucher, index) => (
-          <div
-            key={index}
-            className={`bg-white rounded-lg shadow-card p-6 border-l-4 ${
-              voucher.status === 'Available' ? 'border-accent' : 'border-gray-400 opacity-60'
-            }`}
-          >
-            <div className="flex items-start justify-between mb-3">
-              <Icon name="ticket" className={`text-2xl ${voucher.status === 'Available' ? 'text-accent' : 'text-gray-400'}`} />
-              <span className={`text-xs font-bold px-3 py-1 rounded-full ${
-                voucher.status === 'Available' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-              }`}>
-                {voucher.status}
-              </span>
-            </div>
-            <h4 className="text-lg font-bold text-text-main mb-2">{voucher.title}</h4>
-            <p className="text-text-sub text-sm mb-3">{voucher.description}</p>
-            <div className="border-t border-dashed border-gray-300 pt-3">
-              <p className="text-xs text-text-sub mb-1">Code: <span className="font-mono font-bold text-text-main">{voucher.code}</span></p>
-              <p className="text-xs text-text-sub">Expires: {voucher.expiryDate}</p>
-            </div>
-            {voucher.status === 'Available' && (
-              <button className="w-full mt-4 bg-primary hover:bg-secondary text-white font-bold py-2 rounded">
-                Use Now
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const CouponTab = () => {
-  const coupons = [
-    { code: 'SAVE100K', discount: '100,000 VND', minPurchase: '500,000 VND', expiryDate: '2024-12-31', category: 'General' },
-    { code: 'FIRSTTIME', discount: '30%', minPurchase: '200,000 VND', expiryDate: '2024-12-31', category: 'New User' },
-    { code: 'VIP200K', discount: '200,000 VND', minPurchase: '1,000,000 VND', expiryDate: '2024-12-31', category: 'VIP' },
-  ];
-
-  return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-center bg-primary text-white py-4 px-8 rounded-lg mb-6">
-        COUPON
-      </h2>
-      <div className="flex justify-between items-center">
-        <h3 className="text-xl font-bold text-primary">My Coupons</h3>
-        <button className="bg-primary hover:bg-secondary text-white font-bold py-2 px-6 rounded">
-          Redeem Coupon
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {coupons.map((coupon, index) => (
-          <div key={index} className="bg-white rounded-lg shadow-card overflow-hidden flex">
-            <div className="bg-gradient-to-br from-accent to-orange-600 text-white p-6 flex items-center justify-center w-1/3">
-              <div className="text-center">
-                <p className="text-sm mb-1">Save</p>
-                <p className="text-2xl font-bold">{coupon.discount}</p>
+      {coupons.length === 0 ? (
+        <div className="bg-white rounded-lg shadow-card p-8 text-center">
+          <Icon name="ticket" className="text-6xl text-gray-300 mx-auto mb-4" />
+          <p className="text-text-sub">No coupons available</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {coupons.map((coupon, index) => (
+            <div
+              key={index}
+              className={`bg-white rounded-lg shadow-card p-6 border-l-4 ${coupon.state === 'Available' ? 'border-accent' : 'border-gray-400 opacity-60'
+                }`}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <Icon name="ticket" className={`text-2xl ${coupon.state === 'Available' ? 'text-accent' : 'text-gray-400'}`} />
+                <span className={`text-xs font-bold px-3 py-1 rounded-full ${coupon.state === 'Available' ? 'bg-green-100 text-green-700' :
+                  coupon.state === 'Used' ? 'bg-gray-100 text-gray-600' :
+                    'bg-red-100 text-red-600'
+                  }`}>
+                  {coupon.state}
+                </span>
               </div>
-            </div>
-            <div className="p-6 flex-1">
-              <div className="flex items-start justify-between mb-2">
-                <h4 className="font-bold text-text-main text-lg">{coupon.code}</h4>
-                <span className="bg-primary text-white text-xs px-2 py-1 rounded">{coupon.category}</span>
+              <h4 className="text-lg font-bold text-text-main mb-2">{coupon.couponType}</h4>
+              <p className="text-text-sub text-sm mb-3">
+                {coupon.discountType === 'percentage'
+                  ? `${coupon.discountValue}% off`
+                  : `${coupon.discountValue.toLocaleString()} VND off`}
+              </p>
+              <div className="border-t border-dashed border-gray-300 pt-3">
+                <p className="text-xs text-text-sub mb-1">
+                  Code: <span className="font-mono font-bold text-text-main">{coupon.couponCode}</span>
+                </p>
+                <p className="text-xs text-text-sub mb-1">Min: {coupon.minPurchase.toLocaleString()} VND</p>
+                <p className="text-xs text-text-sub">
+                  Expires: {new Date(coupon.expiryDate).toLocaleDateString()}
+                </p>
               </div>
-              <p className="text-text-sub text-sm mb-2">Min. purchase: {coupon.minPurchase}</p>
-              <p className="text-text-sub text-xs">Valid until: {coupon.expiryDate}</p>
-              <button className="mt-4 w-full border-2 border-primary text-primary hover:bg-primary hover:text-white font-bold py-2 rounded transition">
-                Apply Coupon
-              </button>
+              {coupon.state === 'Available' && (
+                <button className="w-full mt-4 bg-primary hover:bg-secondary text-white font-bold py-2 rounded">
+                  Use Now
+                </button>
+              )}
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
 
 const TransactionHistoryTab = () => {
-  const transactions = [
-    {
-      id: 'TXN-20241120-001',
-      date: '2024-11-20',
-      type: 'Booking',
-      description: 'Avengers: Endgame - 2 tickets',
-      amount: '240,000 VND',
-      status: 'Completed',
-      paymentMethod: 'Credit Card'
-    },
-    {
-      id: 'TXN-20241115-002',
-      date: '2024-11-15',
-      type: 'Combo',
-      description: 'Popcorn & Drink Combo x2',
-      amount: '160,000 VND',
-      status: 'Completed',
-      paymentMethod: 'E-Wallet'
-    },
-    {
-      id: 'TXN-20241110-003',
-      date: '2024-11-10',
-      type: 'Booking',
-      description: 'The Matrix - 1 ticket',
-      amount: '120,000 VND',
-      status: 'Completed',
-      paymentMethod: 'Gift Card'
-    },
-    {
-      id: 'TXN-20241105-004',
-      date: '2024-11-05',
-      type: 'Gift Card',
-      description: 'Purchase Gift Card',
-      amount: '500,000 VND',
-      status: 'Completed',
-      paymentMethod: 'Bank Transfer'
-    },
-  ];
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [pagination, setPagination] = useState({ total: 0, limit: 20, offset: 0, hasMore: false });
+
+  useEffect(() => {
+    fetchTransactions();
+  }, []);
+
+  const fetchTransactions = async (offset = 0) => {
+    try {
+      setLoading(true);
+      const result = await transactionService.getTransactionHistory(20, offset);
+      setTransactions(result.data || []);
+      setPagination(result.pagination);
+    } catch (error) {
+      console.error('Failed to fetch transactions:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadMore = () => {
+    const newOffset = pagination.offset + pagination.limit;
+    fetchTransactions(newOffset);
+  };
 
   return (
     <div className="space-y-6">
@@ -727,113 +834,172 @@ const TransactionHistoryTab = () => {
       </h2>
       <div className="bg-white rounded-lg shadow-card p-6">
         <h3 className="text-xl font-bold text-primary mb-6">Transaction History</h3>
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b-2 border-primary">
-              <th className="text-left py-3 px-4 font-semibold text-text-main">Transaction ID</th>
-              <th className="text-left py-3 px-4 font-semibold text-text-main">Date</th>
-              <th className="text-left py-3 px-4 font-semibold text-text-main">Type</th>
-              <th className="text-left py-3 px-4 font-semibold text-text-main">Description</th>
-              <th className="text-right py-3 px-4 font-semibold text-text-main">Amount</th>
-              <th className="text-left py-3 px-4 font-semibold text-text-main">Payment</th>
-              <th className="text-center py-3 px-4 font-semibold text-text-main">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {transactions.map((transaction, index) => (
-              <tr key={index} className="border-b border-gray-200 hover:bg-background">
-                <td className="py-3 px-4 text-text-sub font-mono text-sm">{transaction.id}</td>
-                <td className="py-3 px-4 text-text-sub">{transaction.date}</td>
-                <td className="py-3 px-4">
-                  <span className="bg-primary bg-opacity-10 text-primary px-3 py-1 rounded-full text-sm font-semibold">
-                    {transaction.type}
-                  </span>
-                </td>
-                <td className="py-3 px-4 text-text-main">{transaction.description}</td>
-                <td className="py-3 px-4 text-right font-semibold text-text-main">{transaction.amount}</td>
-                <td className="py-3 px-4 text-text-sub text-sm">{transaction.paymentMethod}</td>
-                <td className="py-3 px-4 text-center">
-                  <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-semibold">
-                    {transaction.status}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+          </div>
+        ) : transactions.length === 0 ? (
+          <div className="text-center py-12">
+            <Icon name="file-text" className="text-6xl text-gray-300 mx-auto mb-4" />
+            <p className="text-text-sub">No transactions yet</p>
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b-2 border-primary">
+                    <th className="text-left py-3 px-4 font-semibold text-text-main">Transaction ID</th>
+                    <th className="text-left py-3 px-4 font-semibold text-text-main">Date</th>
+                    <th className="text-left py-3 px-4 font-semibold text-text-main">Type</th>
+                    <th className="text-left py-3 px-4 font-semibold text-text-main">Description</th>
+                    <th className="text-right py-3 px-4 font-semibold text-text-main">Amount</th>
+                    <th className="text-left py-3 px-4 font-semibold text-text-main">Payment</th>
+                    <th className="text-center py-3 px-4 font-semibold text-text-main">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.map((transaction, index) => (
+                    <tr key={index} className="border-b border-gray-200 hover:bg-gray-50">
+                      <td className="py-3 px-4 font-mono text-sm text-text-main">{transaction.transactionId}</td>
+                      <td className="py-3 px-4 text-text-sub">{new Date(transaction.date).toLocaleDateString()}</td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-1 rounded text-xs font-semibold ${transaction.type === 'Booking' ? 'bg-blue-100 text-blue-700' :
+                          transaction.type === 'Gift Card' ? 'bg-purple-100 text-purple-700' :
+                            transaction.type === 'Combo' ? 'bg-orange-100 text-orange-700' :
+                              'bg-gray-100 text-gray-700'
+                          }`}>
+                          {transaction.type}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-text-main">{transaction.description}</td>
+                      <td className="py-3 px-4 text-right font-semibold text-text-main">
+                        {transaction.amount.toLocaleString()} VND
+                      </td>
+                      <td className="py-3 px-4 text-text-sub">{transaction.paymentMethod}</td>
+                      <td className="py-3 px-4 text-center">
+                        <span className={`px-3 py-1 rounded-full text-sm font-semibold ${transaction.status === 'Completed' ? 'bg-green-100 text-green-700' :
+                          transaction.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-red-100 text-red-700'
+                          }`}>
+                          {transaction.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {pagination.hasMore && (
+              <div className="text-center mt-6">
+                <button
+                  onClick={loadMore}
+                  className="bg-primary hover:bg-secondary text-white font-bold py-2 px-6 rounded"
+                >
+                  Load More
+                </button>
+              </div>
+            )}
+
+            <div className="text-center mt-4 text-sm text-text-sub">
+              Showing {transactions.length} of {pagination.total} transactions
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
 };
 
 const MembershipCardTab = () => {
+  const [cardData, setCardData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchMembershipCard = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await membershipService.getMembershipCard();
+      setCardData(data);
+    } catch (err) {
+      console.error('Failed to fetch membership card:', err);
+      setError(err.message || 'Failed to load membership card');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchMembershipCard();
+  }, [fetchMembershipCard]);
+
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-center bg-primary text-white py-4 px-8 rounded-lg mb-6">
         MEMBERSHIP CARD
       </h2>
-      <div className="bg-gradient-to-r from-primary via-secondary to-accent rounded-lg shadow-card p-8 text-white">
-        <div className="flex items-start justify-between mb-6">
-          <div>
-            <h3 className="text-2xl font-bold mb-2">BKinema VIP Member</h3>
-            <p className="text-sm opacity-90">Premium Membership</p>
-          </div>
-          <Icon name="star" className="text-4xl" />
-        </div>
-        <div className="mb-6">
-          <p className="text-sm opacity-90 mb-1">Member Name</p>
-          <p className="text-xl font-bold">Lê Phạm Tiến Long</p>
-        </div>
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div>
-            <p className="text-sm opacity-90 mb-1">Card Number</p>
-            <p className="font-mono font-bold">9992-5884-4608-8391</p>
-          </div>
-          <div>
-            <p className="text-sm opacity-90 mb-1">Valid Until</p>
-            <p className="font-bold">12/2025</p>
-          </div>
-        </div>
-        <div className="border-t border-white border-opacity-30 pt-4">
-          <p className="text-sm">Member since: January 2024</p>
-        </div>
-      </div>
 
-      <div className="bg-white rounded-lg shadow-card p-6">
-        <h3 className="text-xl font-bold text-primary mb-4">Membership Benefits</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="flex items-start">
-            <Icon name="check-circle" className="text-green-600 text-xl mr-3 mt-1" />
-            <div>
-              <p className="font-semibold text-text-main">Priority Booking</p>
-              <p className="text-text-sub text-sm">Get early access to tickets</p>
-            </div>
-          </div>
-          <div className="flex items-start">
-            <Icon name="check-circle" className="text-green-600 text-xl mr-3 mt-1" />
-            <div>
-              <p className="font-semibold text-text-main">Exclusive Discounts</p>
-              <p className="text-text-sub text-sm">Up to 20% off on tickets</p>
-            </div>
-          </div>
-          <div className="flex items-start">
-            <Icon name="check-circle" className="text-green-600 text-xl mr-3 mt-1" />
-            <div>
-              <p className="font-semibold text-text-main">Bonus Points</p>
-              <p className="text-text-sub text-sm">Earn 2x points on every purchase</p>
-            </div>
-          </div>
-          <div className="flex items-start">
-            <Icon name="check-circle" className="text-green-600 text-xl mr-3 mt-1" />
-            <div>
-              <p className="font-semibold text-text-main">Birthday Rewards</p>
-              <p className="text-text-sub text-sm">Free tickets on your birthday</p>
-            </div>
-          </div>
+      {loading && (
+        <div className="text-center py-12">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+          <p className="mt-4 text-text-sub">Loading your membership card...</p>
         </div>
-      </div>
+      )}
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+          <p className="text-red-600">{error}</p>
+          <button
+            onClick={fetchMembershipCard}
+            className="mt-4 px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {!loading && !error && cardData && (
+        <>
+          <MembershipCard cardData={cardData} />
+
+          <div className="bg-white rounded-lg shadow-card p-6">
+            <h3 className="text-xl font-bold text-primary mb-4">Membership Benefits</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-start">
+                <Icon name="check-circle" className="text-green-600 text-xl mr-3 mt-1" />
+                <div>
+                  <p className="font-semibold text-text-main">Priority Booking</p>
+                  <p className="text-text-sub text-sm">Get early access to tickets</p>
+                </div>
+              </div>
+              <div className="flex items-start">
+                <Icon name="check-circle" className="text-green-600 text-xl mr-3 mt-1" />
+                <div>
+                  <p className="font-semibold text-text-main">Exclusive Discounts</p>
+                  <p className="text-text-sub text-sm">Up to 20% off on tickets</p>
+                </div>
+              </div>
+              <div className="flex items-start">
+                <Icon name="check-circle" className="text-green-600 text-xl mr-3 mt-1" />
+                <div>
+                  <p className="font-semibold text-text-main">Bonus Points</p>
+                  <p className="text-text-sub text-sm">Earn 2x points on every purchase</p>
+                </div>
+              </div>
+              <div className="flex items-start">
+                <Icon name="check-circle" className="text-green-600 text-xl mr-3 mt-1" />
+                <div>
+                  <p className="font-semibold text-text-main">Birthday Rewards</p>
+                  <p className="text-text-sub text-sm">Free tickets on your birthday</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
@@ -866,9 +1032,8 @@ const CustomerPage = () => {
       case 'giftcard':
         return <GiftCardTab />;
       case 'voucher':
-        return <VoucherTab />;
       case 'coupon':
-        return <CouponTab />;
+        return <VoucherTab />;
       case 'transactions':
         return <TransactionHistoryTab />;
       default:
@@ -894,11 +1059,10 @@ const CustomerPage = () => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`w-full text-left px-6 py-4 flex items-center transition-colors ${
-                    activeTab === tab.id
+                  className={`w-full text-left px-6 py-4 flex items-center transition-colors ${activeTab === tab.id
                       ? 'bg-primary text-white font-bold'
                       : 'text-gray-600 hover:bg-gray-100'
-                  }`}
+                    }`}
                 >
                   <Icon name={tab.icon} className="mr-3 text-lg" />
                   <span className="text-sm">{tab.label}</span>

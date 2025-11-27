@@ -1,3 +1,9 @@
 export { movieService } from './movie.service';
 export { theaterService } from './theater.service';
 export { authService } from './auth.service';
+export { membershipService } from './membership.service';
+export { dashboardService } from './dashboard.service';
+export { couponService } from './coupon.service';
+export { transactionService } from './transaction.service';
+export { pointService } from './point.service';
+export { giftService } from './gift.service';

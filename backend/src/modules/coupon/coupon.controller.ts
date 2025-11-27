@@ -95,6 +95,18 @@ export class CouponController {
   }
 
   /**
+   * Get my coupons - all coupons owned by customer
+   * GET /coupon/my-coupons
+   */
+  @Get('my-coupons')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('customer')
+  async getMyCoupons(@CurrentUser() user: any) {
+    const result = await this.couponService.getMyCoupons(user.userId);
+    return successResponse('My coupons retrieved successfully', result);
+  }
+
+  /**
    * CRUD operations - These must be AFTER specific routes to avoid conflicts
    */
   @Get(':id')

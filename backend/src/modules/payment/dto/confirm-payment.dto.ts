@@ -14,12 +14,21 @@ export class ConfirmPaymentDto {
   @IsString()
   transactionId: string;
 
-  @ApiProperty({ example: 250000, description: 'Total amount to be paid' })
-  @IsNumber()
-  totalAmount: number;
-
-  @ApiProperty({ example: 15, description: 'Payment duration in minutes' })
+  @ApiProperty({
+    example: 15,
+    description: 'Payment duration in minutes',
+  })
   @IsInt()
   @Min(1)
   duration: number;
+
+  @ApiProperty({
+    example: 250000,
+    description:
+      'OPTIONAL: Total amount (if provided, backend will recalculate and override this value with final amount after coupon + membership discount)',
+    required: false,
+  })
+  @IsNumber()
+  totalAmount?: number;
 }
+

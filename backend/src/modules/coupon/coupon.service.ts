@@ -152,6 +152,50 @@ export class CouponService {
   }
 
   /**
+   * Get all coupons owned by customer (my coupons)
+   * Calls sp_get_customer_coupons stored procedure
+   */
+  async getMyCoupons(customerId: number) {
+    try {
+      // Call stored procedure
+      const result = await this.dataSource.query(
+        'CALL sp_get_customer_coupons(?)',
+        [customerId]
+      );
+
+      // SP returns array of coupons as first result set
+      const coupons = result[0] || [];
+
+      // Categorize coupons by state
+      const available = coupons.filter((c: any) => c.couponState === 'Available');
+      const used = coupons.filter((c: any) => c.couponState === 'Used');
+      const expired = coupons.filter((c: any) => c.couponState === 'Expired');
+
+      return {
+        coupons: coupons.map((coupon: any) => ({
+          couponId: coupon.couponId,
+          couponCode: coupon.couponCode,
+          couponType: coupon.couponType,
+          balance: parseFloat(coupon.balance) || 0,
+          expiryDate: coupon.expiryDate,
+          state: coupon.couponState,
+          isGifted: coupon.isGifted === 1,
+        })),
+        summary: {
+          total: coupons.length,
+          available: available.length,
+          used: used.length,
+          expired: expired.length,
+        },
+      };
+    } catch (error: any) {
+      throw new BadRequestException(
+        error.sqlMessage || error.message || 'Failed to get coupons'
+      );
+    }
+  }
+
+  /**
    * Get sent coupon gifts by current customer
    */
   async getSentCouponGifts(customerId: number, limit = 50, offset = 0) {

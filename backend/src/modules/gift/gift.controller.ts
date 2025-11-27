@@ -21,6 +21,17 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 export class GiftController {
   constructor(private readonly giftService: GiftService) {}
 
+  @Get('my-gift-cards')
+  @ApiOperation({ summary: 'Get my received gift cards' })
+  @ApiResponse({
+    status: 200,
+    description: 'Gift cards retrieved successfully',
+  })
+  async getMyGiftCards(@CurrentUser() user) {
+    const customerId = user.id;
+    return this.giftService.getCustomerGiftCards(customerId);
+  }
+
   @Post('booking')
   @ApiOperation({ summary: 'Send booking as gift to another customer' })
   @ApiResponse({

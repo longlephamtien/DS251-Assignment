@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post, Get, Param } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PaymentService } from './payment.service';
 import { ConfirmPaymentDto } from './dto/confirm-payment.dto';
@@ -8,6 +8,15 @@ import { CancelPaymentDto } from './dto/cancel-payment.dto';
 @Controller('payment')
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
+
+  @Get('calculate/:bookingId')
+  @ApiOperation({
+    summary:
+      'Calculate final amount for a booking (after coupon + membership discount)',
+  })
+  async calculateFinalAmount(@Param('bookingId') bookingId: number) {
+    return this.paymentService.calculateFinalAmount(bookingId);
+  }
 
   @Post('confirm')
   @ApiOperation({ summary: 'Confirm payment and mark booking as Paid' })
@@ -21,3 +30,4 @@ export class PaymentController {
     return this.paymentService.cancelPayment(dto);
   }
 }
+

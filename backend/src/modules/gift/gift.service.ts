@@ -18,6 +18,43 @@ export class GiftService {
   ) {}
 
   /**
+   * Get customer's received gift cards
+   */
+  async getCustomerGiftCards(customerId: number) {
+    try {
+      // Call stored procedure
+      const result = await this.dataSource.query(
+        'CALL sp_get_customer_gift_cards(?)',
+        [customerId],
+      );
+
+      // Parse result - single result set with gift cards
+      const giftCards = result[0] || [];
+
+      return {
+        giftCards: giftCards.map((card: any) => ({
+          giftCardId: card.giftCardId,
+          senderName: card.senderName,
+          balance: parseFloat(card.balance) || 0,
+          originalBalance: parseFloat(card.originalBalance) || 0,
+          createdDate: card.createdDate,
+          expiryDate: card.expiryDate,
+          status: card.status,
+        })),
+        summary: {
+          total: giftCards.length,
+          totalBalance: giftCards.reduce(
+            (sum: number, card: any) => sum + (parseFloat(card.balance) || 0),
+            0,
+          ),
+        },
+      };
+    } catch (error) {
+      throw new Error(`Failed to get customer gift cards: ${error.message}`);
+    }
+  }
+
+  /**
    * Transfer booking from sender to receiver
    * 1. Verify sender owns the booking
    * 2. Verify receiver exists and is a customer

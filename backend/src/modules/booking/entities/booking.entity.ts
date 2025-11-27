@@ -1,6 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn,OneToMany } from 'typeorm';
 import { Customer } from '../../user/entities/customer.entity';
-
+import { Coupon } from '../../coupon/entities/coupon.entity';
 @Entity('booking')
 export class Booking {
   @PrimaryGeneratedColumn({ type: 'bigint' })
@@ -21,4 +21,7 @@ export class Booking {
   @ManyToOne(() => Customer)
   @JoinColumn({ name: 'customer_id' })
   customer: Customer;
+
+  @OneToMany(() => Coupon, (coupon) => coupon.customer)
+coupons: Coupon[]
 }
