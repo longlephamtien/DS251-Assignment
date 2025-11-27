@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Icon from '../components/common/Icon';
 import Notification from '../components/common/Notification';
 import { useBooking } from '../context/BookingContext';
+import { startBooking } from '../api/bookingService';
 import { showtimeService } from '../services/showtime.service';
 import { seatService } from '../services/seat.service';
 import { theaterService } from '../services/theater.service';
@@ -33,6 +34,7 @@ export default function BookingPage() {
 
   const [selectedSeats, setSelectedSeats] = useState(bookingData.selectedSeats || []);
   const movieCombo = bookingData.comboTotal || 0;
+  const [isLoading, setIsLoading] = useState(false);
   const [apiSeats, setApiSeats] = useState([]);
   const [loadingSeats, setLoadingSeats] = useState(false);
 
@@ -335,6 +337,87 @@ export default function BookingPage() {
     return 'bg-green-100 text-gray-800 hover:bg-green-200 border-green-400';
   };
 
+  const handleNext = async () => {
+    if (selectedSeats.length === 0) {
+      setNotification({
+        isOpen: true,
+        title: 'No Seats Selected',
+        message: 'Please select at least one seat to continue.',
+        type: 'warning'
+      });
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Group seats by type for display
+      const seatsByType = selectedSeats.reduce((acc, seat) => {
+        const row = seat.charAt(0);
+        const seatRow = seatRows.find(r => r.row === row);
+        if (seatRow) {
+          const type = seatRow.type;
+          if (!acc[type]) {
+            acc[type] = { count: 0, seats: [], price: SEAT_PRICES[type] };
+          }
+          acc[type].count++;
+          acc[type].seats.push(seat);
+        }
+        return acc;
+      }, {});
+
+      // TODO: Map seat names to real seat IDs from backend
+      // Currently using dummy seat IDs for testing
+      // In production, you need to:
+      // 1. Fetch seat map with IDs from backend when page loads
+      // 2. Map selected seat names (e.g., 'A1', 'B2') to their database IDs
+      const seatIds = selectedSeats.map((_, index) => index + 1);
+
+      // Get customer ID from authenticated user
+      const userStr = localStorage.getItem('user');
+      if (!userStr) {
+        throw new Error('Please login to continue booking');
+      }
+      const user = JSON.parse(userStr);
+      const customerId = parseInt(user.userId); // Convert to number for backend validator
+
+      // Call API to start booking
+      const response = await startBooking(customerId, parseInt(showtimeId), seatIds);
+
+      // Convert bookingId to number (MySQL may return string)
+      const bookingId = parseInt(response.bookingId);
+
+      // Update context with booking ID
+      updateBookingData({
+        bookingId: bookingId,
+        customerId,
+        selectedSeats,
+        seatTotal: total,
+        seatsByType,
+        bookingInfo
+      });
+
+      // Navigate to combo page
+      navigate(`/booking/combo/theater/${theaterId}/showtime/${showtimeId}/date/${date}`, {
+        state: {
+          selectedSeats,
+          bookingInfo,
+          seatTotal: total,
+          seatsByType
+        }
+      });
+    } catch (error) {
+      setNotification({
+        isOpen: true,
+        title: 'Booking Failed',
+        message: error.message || 'Failed to create booking. Please try again.',
+        type: 'error'
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Main Content */}
@@ -478,35 +561,20 @@ export default function BookingPage() {
 
                 {/* Next Button */}
                 <button
-                  onClick={() => {
-                    // Group seats by type
-                    const seatsByType = selectedSeats.reduce((acc, seat) => {
-                      const row = seat.charAt(0);
-                      const seatRow = seatRows.find(r => r.row === row);
-                      if (seatRow) {
-                        const type = seatRow.type;
-                        if (!acc[type]) {
-                          acc[type] = { count: 0, seats: [], price: SEAT_PRICES[type] };
-                        }
-                        acc[type].count++;
-                        acc[type].seats.push(seat);
-                      }
-                      return acc;
-                    }, {});
-
-                    navigate(`/booking/combo/theater/${theaterId}/showtime/${showtimeId}/date/${date}`, {
-                      state: {
-                        selectedSeats,
-                        bookingInfo,
-                        seatTotal: total,
-                        seatsByType
-                      }
-                    });
-                  }}
-                  className="flex items-center gap-2 bg-red-600 hover:bg-red-700 px-6 py-3 rounded transition-colors"
+                  onClick={handleNext}
+                  disabled={isLoading || selectedSeats.length === 0}
+                  className="flex items-center gap-2 bg-red-600 hover:bg-red-700 px-6 py-3 rounded transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
-                  <span className="font-semibold">NEXT</span>
-                  <Icon name="chevron-right" className="w-5 h-5" />
+                  {isLoading ? (
+                    <>
+                      <span className="font-semibold">LOADING...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-semibold">NEXT</span>
+                      <Icon name="chevron-right" className="w-5 h-5" />
+                    </>
+                  )}
                 </button>
               </div>
             </div>

@@ -12,6 +12,8 @@ export const useBooking = () => {
 
 export const BookingProvider = ({ children }) => {
   const [bookingData, setBookingData] = useState({
+    bookingId: null,
+    customerId: null, // Will be set from user session/auth
     selectedSeats: [],
     seatTotal: 0,
     seatsByType: {},
@@ -27,6 +29,8 @@ export const BookingProvider = ({ children }) => {
 
   const clearBookingData = () => {
     setBookingData({
+      bookingId: null,
+      customerId: null,
       selectedSeats: [],
       seatTotal: 0,
       seatsByType: {},

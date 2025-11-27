@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Icon from '../components/common/Icon';
+import Notification from '../components/common/Notification';
 import { useBooking } from '../context/BookingContext';
+import { updateBookingFwb } from '../api/bookingService';
 
 export default function ComboPage() {
   const { theaterId, showtimeId, date } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const { bookingData, updateBookingData } = useBooking();
-  
+
   // Get booking data from location state or context
   const { selectedSeats = bookingData.selectedSeats || [], bookingInfo = bookingData.bookingInfo || {}, seatTotal = bookingData.seatTotal || 0, seatsByType = bookingData.seatsByType || {} } = location.state || bookingData;
 
@@ -82,6 +84,13 @@ export default function ComboPage() {
   ]);
 
   const [selectedCombos, setSelectedCombos] = useState(bookingData.selectedCombos || {});
+  const [isLoading, setIsLoading] = useState(false);
+  const [notification, setNotification] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info'
+  });
 
   // Persist combo selection to context
   useEffect(() => {
@@ -97,12 +106,12 @@ export default function ComboPage() {
     setSelectedCombos(prev => {
       const currentQty = prev[comboId] || 0;
       const newQty = Math.max(0, currentQty + change);
-      
+
       if (newQty === 0) {
         const { [comboId]: _, ...rest } = prev;
         return rest;
       }
-      
+
       return { ...prev, [comboId]: newQty };
     });
   };
@@ -117,18 +126,59 @@ export default function ComboPage() {
   const comboTotal = calculateComboTotal();
   const totalPrice = seatTotal + comboTotal;
 
-  const handleNext = () => {
-    navigate(`/booking/payment/theater/${theaterId}/showtime/${showtimeId}/date/${date}`, {
-      state: {
-        selectedSeats,
-        bookingInfo,
-        seatTotal,
-        seatsByType,
+  const handleNext = async () => {
+    // Check if we have a booking ID
+    if (!bookingData.bookingId) {
+      setNotification({
+        isOpen: true,
+        title: 'Booking Error',
+        message: 'No booking found. Please start from seat selection.',
+        type: 'error'
+      });
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Convert selectedCombos object to array format expected by API
+      const items = Object.entries(selectedCombos).map(([id, quantity]) => ({
+        id: parseInt(id),
+        quantity
+      }));
+
+      // Call API to update F&B items (even if empty array)
+      await updateBookingFwb(bookingData.bookingId, items);
+
+      // Update context
+      updateBookingData({
         selectedCombos,
         comboTotal,
         totalPrice
-      }
-    });
+      });
+
+      // Navigate to payment page
+      navigate(`/booking/payment/theater/${theaterId}/showtime/${showtimeId}/date/${date}`, {
+        state: {
+          selectedSeats,
+          bookingInfo,
+          seatTotal,
+          seatsByType,
+          selectedCombos,
+          comboTotal,
+          totalPrice
+        }
+      });
+    } catch (error) {
+      setNotification({
+        isOpen: true,
+        title: 'Update Failed',
+        message: error.message || 'Failed to update combo selection. Please try again.',
+        type: 'error'
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handlePrevious = () => {
@@ -177,7 +227,7 @@ export default function ComboPage() {
                       <h3 className="font-bold text-lg mb-1 text-gray-900">{combo.name}</h3>
                       <p className="text-sm text-gray-600 mb-2">{combo.items}</p>
                       <p className="text-xs text-gray-500 line-clamp-2 mb-2">{combo.description}</p>
-                      
+
                       {/* Price */}
                       <div className="flex items-baseline gap-2">
                         <span className="text-lg font-bold text-grey-600">₫{combo.price.toLocaleString()}</span>
@@ -262,16 +312,32 @@ export default function ComboPage() {
                 {/* Next Button */}
                 <button
                   onClick={handleNext}
-                  className="flex items-center gap-2 bg-red-600 hover:bg-red-700 px-6 py-3 rounded transition-colors"
+                  disabled={isLoading}
+                  className="flex items-center gap-2 bg-red-600 hover:bg-red-700 px-6 py-3 rounded transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
-                  <span className="font-semibold">NEXT</span>
-                  <Icon name="chevron-right" className="w-5 h-5" />
+                  {isLoading ? (
+                    <span className="font-semibold">LOADING...</span>
+                  ) : (
+                    <>
+                      <span className="font-semibold">NEXT</span>
+                      <Icon name="chevron-right" className="w-5 h-5" />
+                    </>
+                  )}
                 </button>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Notification Modal */}
+      <Notification
+        isOpen={notification.isOpen}
+        onClose={() => setNotification({ ...notification, isOpen: false })}
+        title={notification.title}
+        message={notification.message}
+        type={notification.type}
+      />
     </div>
   );
 }
