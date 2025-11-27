@@ -245,9 +245,13 @@ export default function BookingPage() {
       // 2. Map selected seat names (e.g., 'A1', 'B2') to their database IDs
       const seatIds = selectedSeats.map((_, index) => index + 1);
 
-      // TODO: Get real customer ID from authentication context
-      // Currently using a test customer ID
-      const customerId = bookingData.customerId || 1;
+      // Get customer ID from authenticated user
+      const userStr = localStorage.getItem('user');
+      if (!userStr) {
+        throw new Error('Please login to continue booking');
+      }
+      const user = JSON.parse(userStr);
+      const customerId = parseInt(user.userId); // Convert to number for backend validator
 
       // Call API to start booking
       const response = await startBooking(customerId, parseInt(showtimeId), seatIds);

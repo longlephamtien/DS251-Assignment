@@ -65,4 +65,22 @@ export class BookingService {
       );
     }
   }
+
+  /**
+   * Get all bookings for a customer
+   */
+  async getMyBookings(customerId: number) {
+    try {
+      const [bookings] = await this.dataSource.query(
+        'CALL sp_get_customer_bookings(?)',
+        [customerId]
+      );
+
+      return bookings;
+    } catch (error: any) {
+      throw new InternalServerErrorException(
+        error.sqlMessage || error.message || 'Failed to fetch bookings',
+      );
+    }
+  }
 }

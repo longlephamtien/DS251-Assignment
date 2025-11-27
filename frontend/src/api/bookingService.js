@@ -1,6 +1,6 @@
 // API Service for Booking, Payment, and Refund
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+import config from '../config';
 
 /**
  * Start a new booking (hold seats)
@@ -11,7 +11,7 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
  */
 export const startBooking = async (customerId, showtimeId, seatIds) => {
     try {
-        const response = await fetch(`${API_BASE_URL}/booking/start`, {
+        const response = await fetch(`${config.apiUrl}/booking/start`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -43,7 +43,7 @@ export const startBooking = async (customerId, showtimeId, seatIds) => {
  */
 export const updateBookingFwb = async (bookingId, items) => {
     try {
-        const response = await fetch(`${API_BASE_URL}/booking/fwb`, {
+        const response = await fetch(`${config.apiUrl}/booking/fwb`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -77,7 +77,7 @@ export const updateBookingFwb = async (bookingId, items) => {
  */
 export const confirmPayment = async (bookingId, paymentMethod, transactionId, totalAmount, duration) => {
     try {
-        const response = await fetch(`${API_BASE_URL}/payment/confirm`, {
+        const response = await fetch(`${config.apiUrl}/payment/confirm`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -111,7 +111,7 @@ export const confirmPayment = async (bookingId, paymentMethod, transactionId, to
  */
 export const cancelPayment = async (bookingId, reason) => {
     try {
-        const response = await fetch(`${API_BASE_URL}/payment/cancel`, {
+        const response = await fetch(`${config.apiUrl}/payment/cancel`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -144,7 +144,7 @@ export const cancelPayment = async (bookingId, reason) => {
  */
 export const createRefund = async (bookingId, reason, refundAmount, couponId = null) => {
     try {
-        const response = await fetch(`${API_BASE_URL}/refund/create`, {
+        const response = await fetch(`${config.apiUrl}/refund/create`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -177,6 +177,51 @@ export const generateTransactionId = () => {
     return `TXN${Date.now()}${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 };
 
+/**
+ * Get all bookings for the logged-in customer
+ * @returns {Promise<Array>}
+ */
+export const getMyBookings = async () => {
+    try {
+        const token = localStorage.getItem('accessToken');
+        const response = await fetch(`${config.apiUrl}/booking/my-bookings`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+            },
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Failed to fetch bookings');
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching bookings:', error);
+        throw error;
+    }
+};
+
+/**
+ * Get booking by ID (for payment page)
+ * @param {number} bookingId - ID of the booking
+ * @returns {Promise<Object>}
+ */
+export const getBookingById = async (bookingId) => {
+    try {
+        const bookings = await getMyBookings();
+        const booking = bookings.find(b => b.id === parseInt(bookingId));
+        if (!booking) {
+            throw new Error('Booking not found');
+        }
+        return booking;
+    } catch (error) {
+        console.error('Error fetching booking:', error);
+        throw error;
+    }
+};
+
 export default {
     startBooking,
     updateBookingFwb,
@@ -184,4 +229,6 @@ export default {
     cancelPayment,
     createRefund,
     generateTransactionId,
+    getMyBookings,
+    getBookingById,
 };

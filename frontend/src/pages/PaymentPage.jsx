@@ -12,20 +12,37 @@ import vnpayLogo from '../assets/media/payment/vnpay-logo.png';
 import shopeepayLogo from '../assets/media/payment/shopeepay-logo.png';
 
 export default function PaymentPage() {
-  const { date } = useParams();
+  const { date, bookingId: routeBookingId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const { bookingData } = useBooking();
 
-  // Get booking data from location state or context
+  // Get booking data from location state (coming from My Bookings) or context (booking flow)
+  const currentBookingId = routeBookingId || bookingData.bookingId;
+
+  // Check if we have required data
+  useEffect(() => {
+    if (!currentBookingId) {
+      setNotification({
+        isOpen: true,
+        title: 'Error',
+        message: 'No booking ID found',
+        type: 'error'
+      });
+      setTimeout(() => navigate('/'), 2000);
+    }
+  }, [currentBookingId, navigate]);
+
   const {
     selectedSeats = bookingData.selectedSeats || [],
-    bookingInfo = bookingData.bookingInfo || {},
-    seatTotal = bookingData.seatTotal || 0,
+    bookingInfo = bookingData.bookingInfo || location.state?.bookingInfo || {
+      movie: { title: 'Unknown Movie' }
+    },
+    seatTotal = location.state?.seatTotal || bookingData.seatTotal || 0,
     seatsByType = bookingData.seatsByType || {},
-    comboTotal = bookingData.comboTotal || 0,
-    totalPrice = bookingData.totalPrice || 0
-  } = location.state || bookingData;
+    comboTotal = location.state?.comboTotal || bookingData.comboTotal || 0,
+    totalPrice = location.state?.totalPrice || bookingData.totalPrice || 0
+  } = location.state || {};
 
   const [cgvPoints] = useState(0);
   const [pointsToUse, setPointsToUse] = useState(0);
@@ -63,10 +80,10 @@ export default function PaymentPage() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTimeout = async () => {
-    if (!bookingData.bookingId) return;
+    if (!currentBookingId) return;
 
     try {
-      await cancelPayment(bookingData.bookingId, 'Payment timeout - 5 minutes exceeded');
+      await cancelPayment(currentBookingId, 'Payment timeout - 5 minutes exceeded');
       setNotification({
         isOpen: true,
         title: 'Payment Timeout',
@@ -122,7 +139,7 @@ export default function PaymentPage() {
       return;
     }
 
-    if (!bookingData.bookingId) {
+    if (!currentBookingId) {
       setNotification({
         isOpen: true,
         title: 'Booking Error',
@@ -151,7 +168,7 @@ export default function PaymentPage() {
 
       // Call API to confirm payment
       const response = await confirmPayment(
-        bookingData.bookingId,
+        parseInt(currentBookingId),
         paymentMethod,
         transactionId,
         finalTotal,
@@ -169,9 +186,9 @@ export default function PaymentPage() {
       // Clear booking data
       // clearBookingData(); // Uncomment if you want to clear after success
 
-      // Redirect to success page or home after 2 seconds
+      // Redirect to customer bookings page after 2 seconds
       setTimeout(() => {
-        navigate('/', { state: { paymentSuccess: true, paymentId: response.paymentId } });
+        navigate('/customer', { state: { tab: 'bookings', paymentSuccess: true } });
       }, 2000);
 
     } catch (error) {
