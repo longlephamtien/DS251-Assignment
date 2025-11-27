@@ -111,6 +111,7 @@ export default function BookingPage() {
               showtimeData.au_number,
               parseInt(showtimeData.au_theater_id)
             );
+            console.log('All seats:', seats);
             setApiSeats(seats);
 
             // Fetch showtime seats to get booking status (occupied/held seats)
@@ -258,11 +259,11 @@ export default function BookingPage() {
     }
 
     return showtimeSeats
-      .filter(stSeat => stSeat.status === 'Held' || stSeat.status === 'Sold')
+      .filter(stSeat => stSeat.status === 'Held' || stSeat.status === 'Booked')
       .map(stSeat => {
         // Find corresponding seat in apiSeats to get row and column
         // Note: stSeat.seat_id is a string, seat.id is a number
-        const seatInfo = apiSeats.find(s => s.id === parseInt(stSeat.seat_id));
+        const seatInfo = apiSeats.find(s => parseInt(s.id) === parseInt(stSeat.seat_id));
         if (seatInfo) {
           return `${seatInfo.row_char}${seatInfo.column_number}`;
         }
@@ -270,6 +271,7 @@ export default function BookingPage() {
       })
       .filter(seat => seat !== null);
   }, [showtimeSeats, apiSeats]);
+
   const unavailableSeats = ['A1', 'A10', 'M1', 'M10'];
 
   const handleSeatClick = (seat) => {
