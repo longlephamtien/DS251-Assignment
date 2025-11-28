@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../components/common/Icon';
 import Notification from '../components/common/Notification';
+import ConfirmDialog from '../components/common/ConfirmDialog';
 import MembershipCard from '../components/MembershipCard';
 import { getMyBookings } from '../api/bookingService';
 import { authService, membershipService, dashboardService, couponService, transactionService, pointService, giftService, refundService } from '../services';
@@ -945,6 +946,12 @@ const BookingHistoryTab = () => {
   const [ticketModal, setTicketModal] = useState({ isOpen: false, booking: null });
   const [refundForm, setRefundForm] = useState({ reason: '', amount: 0 });
   const [notification, setNotification] = useState({ isOpen: false, title: '', message: '', type: 'info' });
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
 
   useEffect(() => {
     fetchBookings();
@@ -1130,45 +1137,95 @@ const BookingHistoryTab = () => {
                           </>
                         )}
                         {booking.status === 'Pending' && (
-                          <button
-                            onClick={async () => {
-                              try {
-                                // Call calculate API to get detailed pricing
-                                const response = await fetch(`${require('../config').default.apiUrl}/payment/calculate/${booking.id}`);
-                                const calculation = await response.json();
+                          <>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  // Call calculate API to get detailed pricing
+                                  const response = await fetch(`${require('../config').default.apiUrl}/payment/calculate/${booking.id}`);
+                                  const calculation = await response.json();
 
-                                navigate(`/payment/${booking.id}`, {
-                                  state: {
-                                    totalPrice: calculation.finalAmount || booking.totalAmount,
-                                    seatTotal: calculation.baseSeatPrice || booking.totalAmount,
-                                    comboTotal: calculation.fwbPrice || 0,
-                                    bookingInfo: {
-                                      movie: { title: booking.movieTitle },
-                                      showtime: booking.showtime
-                                    },
-                                    calculation // Pass full calculation data
-                                  }
-                                });
-                              } catch (error) {
-                                console.error('Failed to calculate:', error);
-                                // Fallback to basic data
-                                navigate(`/payment/${booking.id}`, {
-                                  state: {
-                                    totalPrice: booking.totalAmount,
-                                    seatTotal: booking.totalAmount,
-                                    bookingInfo: {
-                                      movie: { title: booking.movieTitle },
-                                      showtime: booking.showtime
+                                  navigate(`/payment/${booking.id}`, {
+                                    state: {
+                                      totalPrice: calculation.finalAmount || booking.totalAmount,
+                                      seatTotal: calculation.baseSeatPrice || booking.totalAmount,
+                                      comboTotal: calculation.fwbPrice || 0,
+                                      bookingInfo: {
+                                        movie: { title: booking.movieTitle },
+                                        showtime: booking.showtime
+                                      },
+                                      calculation // Pass full calculation data
+                                    }
+                                  });
+                                } catch (error) {
+                                  console.error('Failed to calculate:', error);
+                                  // Fallback to basic data
+                                  navigate(`/payment/${booking.id}`, {
+                                    state: {
+                                      totalPrice: booking.totalAmount,
+                                      seatTotal: booking.totalAmount,
+                                      bookingInfo: {
+                                        movie: { title: booking.movieTitle },
+                                        showtime: booking.showtime
+                                      }
+                                    }
+                                  });
+                                }
+                              }}
+                              className="bg-accent hover:bg-accent/90 text-white font-bold py-2 px-8 rounded flex items-center"
+                            >
+                              <Icon name="credit-card" className="mr-2" />
+                              Pay Now
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setConfirmDialog({
+                                  isOpen: true,
+                                  title: 'Cancel Booking',
+                                  message: 'Are you sure you want to cancel this booking?',
+                                  onConfirm: async () => {
+                                    try {
+                                      const response = await fetch(`${require('../config').default.apiUrl}/payment/cancel`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                          bookingId: parseInt(booking.id),
+                                          reason: 'User cancelled from My Bookings'
+                                        })
+                                      });
+
+                                      if (!response.ok) {
+                                        const error = await response.json();
+                                        throw new Error(error.message || 'Failed to cancel booking');
+                                      }
+
+                                      setNotification({
+                                        isOpen: true,
+                                        title: 'Success',
+                                        message: 'Booking cancelled successfully',
+                                        type: 'success'
+                                      });
+                                      // Refresh bookings after short delay
+                                      setTimeout(() => window.location.reload(), 1500);
+                                    } catch (error) {
+                                      console.error('Failed to cancel:', error);
+                                      setNotification({
+                                        isOpen: true,
+                                        title: 'Error',
+                                        message: `Failed to cancel booking: ${error.message}`,
+                                        type: 'error'
+                                      });
                                     }
                                   }
                                 });
-                              }
-                            }}
-                            className="bg-accent hover:bg-accent/90 text-white font-bold py-2 px-8 rounded flex items-center"
-                          >
-                            <Icon name="credit-card" className="mr-2" />
-                            Pay Now
-                          </button>
+                              }}
+                              className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded flex items-center"
+                            >
+                              <Icon name="x" className="mr-2" />
+                              Cancel
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
@@ -1187,7 +1244,7 @@ const BookingHistoryTab = () => {
             {/* Header with movie poster */}
             <div className="bg-gradient-to-r from-primary to-secondary p-6 text-white">
               <div className="flex items-center gap-4">
-                  <div className="w-16 h-24 bg-white/20 rounded overflow-hidden flex-shrink-0">
+                <div className="w-16 h-24 bg-white/20 rounded overflow-hidden flex-shrink-0">
                   <img
                     src={resolvePoster(ticketModal.booking?.moviePoster) || `https://via.placeholder.com/64x96/FFFFFF/6B46C1?text=Movie`}
                     alt={ticketModal.booking?.movieTitle}
@@ -1326,6 +1383,17 @@ const BookingHistoryTab = () => {
         message={notification.message}
         type={notification.type}
         onClose={() => setNotification({ ...notification, isOpen: false })}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText="Yes"
+        cancelText="No"
+        type="danger"
       />
     </div>
   );
