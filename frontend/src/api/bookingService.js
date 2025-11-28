@@ -235,6 +235,32 @@ export const getBookingById = async (bookingId) => {
  * @param {number} bookingId - ID of the booking
  * @returns {Promise<Object>} - Detailed price breakdown
  */
+/**
+ * Get booking details (including created_time_at for countdown)
+ * @param {number} bookingId - ID of the booking
+ * @returns {Promise<{id: number, createdAt: string, status: string}>}
+ */
+export const getBookingDetails = async (bookingId) => {
+    try {
+        const response = await fetch(`${config.apiUrl}/booking/${bookingId}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Failed to get booking details');
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error getting booking details:', error);
+        throw error;
+    }
+};
+
 export const calculateFinalAmount = async (bookingId) => {
     try {
         const response = await fetch(`${config.apiUrl}/payment/calculate/${bookingId}`, {

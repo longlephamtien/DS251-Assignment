@@ -321,10 +321,11 @@ function BookingModal({ movie, dates, onClose }) {
   const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState(dates[0].fullDate);
   const [selectedCity, setSelectedCity] = useState('Ho Chi Minh City');
-  const [selectedFormat, setSelectedFormat] = useState('2D Vietnam Sub');
+  const [selectedFormat, setSelectedFormat] = useState('All');
   const [theaters, setTheaters] = useState([]);
   const [loadingTheaters, setLoadingTheaters] = useState(false);
   const [theaterSchedules, setTheaterSchedules] = useState({});
+  const [availableFormats, setAvailableFormats] = useState(['All']);
 
   const cities = [
     'Ho Chi Minh City',
@@ -360,7 +361,6 @@ function BookingModal({ movie, dates, onClose }) {
     'Thai Nguyen',
     'Tien Giang'
   ];
-  const formats = ['2D Vietnam Sub', 'IMAX2D Vietnam Sub', '4DX2D Vietnam Sub', 'SCREENX-2D Vietnam Sub', 'ULTRA 4DX-SCX2D Vietnam Sub'];
 
   // Fetch theaters when city changes
   useEffect(() => {
@@ -402,6 +402,16 @@ function BookingModal({ movie, dates, onClose }) {
         }
       }
       setTheaterSchedules(schedules);
+
+      // Extract unique auditorium types from all schedules
+      const allShowtimes = Object.values(schedules).flat().filter(Boolean);
+      const uniqueTypes = ['All', ...new Set(allShowtimes.map(s => s.auditorium_type).filter(Boolean))];
+      setAvailableFormats(uniqueTypes);
+
+      // Reset selected format if it's not available anymore
+      if (selectedFormat !== 'All' && !uniqueTypes.includes(selectedFormat)) {
+        setSelectedFormat('All');
+      }
     };
 
     fetchSchedules();
@@ -466,17 +476,18 @@ function BookingModal({ movie, dates, onClose }) {
             </div>
           </div>
 
-          {/* Format Filters - Wrap to New Lines */}
+          {/* Format Filters - Dynamic from Schedule Data */}
           <div className="bg-white px-6 py-3 border-b">
             <div className="flex flex-wrap items-center gap-2">
-              {formats.map((format) => (
+              {availableFormats.map((format) => (
                 <button
                   key={format}
                   onClick={() => setSelectedFormat(format)}
-                  className={`px-4 py-2 text-sm font-medium transition-colors ${selectedFormat === format
-                    ? 'bg-gray-900 text-white'
-                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
-                    }`}
+                  className={`px-4 py-2 text-sm font-medium transition-colors ${
+                    selectedFormat === format
+                      ? 'bg-gray-900 text-white'
+                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+                  }`}
                 >
                   {format}
                 </button>
@@ -512,9 +523,18 @@ function BookingModal({ movie, dates, onClose }) {
                         <p className="text-sm text-gray-500 italic">Loading schedule...</p>
                       ) : Array.isArray(schedule) && schedule.length > 0 ? (
                         <div className="mt-4">
-                          {/* Group showtimes by auditorium type */}
+                          {/* Group showtimes by auditorium type and filter by selected format */}
                           {(() => {
-                            const groupedByType = schedule.reduce((acc, showtime) => {
+                            // Filter by selected format first
+                            const filteredSchedule = selectedFormat === 'All'
+                              ? schedule
+                              : schedule.filter(s => s.auditorium_type === selectedFormat);
+
+                            if (filteredSchedule.length === 0) {
+                              return <p className="text-sm text-gray-500 italic">No showtimes available for selected format</p>;
+                            }
+
+                            const groupedByType = filteredSchedule.reduce((acc, showtime) => {
                               const type = showtime.auditorium_type || 'Standard';
                               if (!acc[type]) {
                                 acc[type] = [];
@@ -526,7 +546,7 @@ function BookingModal({ movie, dates, onClose }) {
                             return Object.entries(groupedByType).map(([type, showtimes]) => (
                               <div key={type} className="mb-4 last:mb-0">
                                 <p className="text-sm font-semibold text-gray-800 mb-2">
-                                  {type} Cinema
+                                  {type}
                                 </p>
                                 <div className="flex flex-wrap gap-2">
                                   {showtimes.map((showtime) => (

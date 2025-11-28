@@ -17,28 +17,30 @@ export default function BookingPage() {
   const location = useLocation();
   const { bookingData, updateBookingData } = useBooking();
 
-  // Sample booking data - would come from API based on URL params
+  // Initial booking info - will be populated from API
   const [bookingInfo, setBookingInfo] = useState({
-    theater: 'BKinema Hùng Vương Plaza',
-    cinema: 'Cinema 5',
-    remaining: { current: 134, total: 134 },
-    showtime: '09:40',
-    date: '25/11/2025',
-    endTime: '12:13',
+    theater: '',
+    cinema: '',
+    remaining: { current: 0, total: 0 },
+    showtime: '',
+    date: '',
+    endTime: '',
     movie: {
-      title: 'WICKED: FOR GOOD',
-      format: '2D',
-      rating: 'K',
-      screen: 'Cinema 5'
+      title: '',
+      format: '',
+      rating: '',
+      screen: ''
     }
   });
 
-  const [selectedSeats, setSelectedSeats] = useState(bookingData.selectedSeats || []);
+  const [selectedSeats, setSelectedSeats] = useState([]);
   const movieCombo = bookingData.comboTotal || 0;
   const [isLoading, setIsLoading] = useState(false);
   const [apiSeats, setApiSeats] = useState([]);
   const [showtimeSeats, setShowtimeSeats] = useState([]);
   const [loadingSeats, setLoadingSeats] = useState(false);
+  const [moviePoster, setMoviePoster] = useState(null);
+  const [movieData, setMovieData] = useState(null);
 
   // Fetch showtime and seat data from API
   useEffect(() => {
@@ -70,10 +72,22 @@ export default function BookingPage() {
           // Fetch movie data
           if (showtimeData.movie_id) {
             movieData = await movieService.getMovieById(parseInt(showtimeData.movie_id));
+            setMovieData(movieData); // Save to state
+            
+            // Load movie poster
+            if (movieData?.posterFile) {
+              try {
+                const posterImg = require(`../assets/media/movies/${movieData.posterFile}`);
+                setMoviePoster(posterImg);
+              } catch (error) {
+                console.warn(`Poster not found: ${movieData.posterFile}`);
+                setMoviePoster(null);
+              }
+            }
           }
 
           // Update booking info if we have all data
-          if (showtimeData && theaterData && auditoriumData) {
+          if (showtimeData && theaterData && auditoriumData && movieData) {
             // Format date
             const dateObj = new Date(showtimeData.date);
             const formattedDate = `${dateObj.getDate().toString().padStart(2, '0')}/${(dateObj.getMonth() + 1).toString().padStart(2, '0')}/${dateObj.getFullYear()}`;
@@ -99,6 +113,7 @@ export default function BookingPage() {
               movie: {
                 ...prev.movie,
                 title: movieData.name,
+                format: auditoriumData.type, // Use auditorium type from database
                 rating: movieData.ageRating,
                 screen: `Auditorium ${showtimeData.au_number}`
               }
@@ -125,6 +140,19 @@ export default function BookingPage() {
             );
             setShowtimeSeats(showtimeSeatsData);
             console.log('Showtime seats data:', showtimeSeatsData);
+            
+            // Update remaining seats (total - occupied)
+            const occupiedCount = showtimeSeatsData.filter(
+              s => s.status === 'Held' || s.status === 'Booked'
+            ).length;
+            
+            setBookingInfo(prev => ({
+              ...prev,
+              remaining: {
+                current: prev.remaining.total - occupiedCount,
+                total: prev.remaining.total
+              }
+            }));
           }
         } catch (error) {
           console.error('Error fetching data:', error);
@@ -138,14 +166,17 @@ export default function BookingPage() {
   }, [showtimeId, theaterId]);
 
 
-  // Load persisted state from location or context
+  // Clear booking data when entering booking page (fresh start)
   useEffect(() => {
-    if (location.state?.selectedSeats) {
-      setSelectedSeats(location.state.selectedSeats);
-    } else if (bookingData.selectedSeats?.length > 0) {
-      setSelectedSeats(bookingData.selectedSeats);
-    }
-  }, [location.state, bookingData.selectedSeats]);
+    // Reset selected seats in context to ensure fresh start
+    updateBookingData({
+      selectedSeats: [],
+      seatTotal: 0,
+      seatsByType: {},
+      comboTotal: 0,
+      selectedCombos: []
+    });
+  }, [showtimeId]); // Reset when showtimeId changes
 
   // Persist seat selection to context
   useEffect(() => {
@@ -168,7 +199,8 @@ export default function BookingPage() {
         selectedSeats,
         seatTotal: calculateTotal(),
         seatsByType,
-        bookingInfo
+        bookingInfo,
+        movieData // Add movieData to context from state
       });
     }
   }, [selectedSeats]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -257,7 +289,7 @@ export default function BookingPage() {
       .filter(seat => seat !== null);
   }, [showtimeSeats, apiSeats]);
 
-  const unavailableSeats = ['A1', 'A10', 'M1', 'M10'];
+  const unavailableSeats = [];
 
   const handleSeatClick = (seat) => {
     if (occupiedSeats.includes(seat) || unavailableSeats.includes(seat)) {
@@ -454,22 +486,37 @@ export default function BookingPage() {
             <div className="px-8">
               <h1 className="text-2xl font-bold text-center mb-4">BOOKING ONLINE</h1>
               <div className="bg-yellow-100 text-gray-900 px-4 py-3 rounded">
-                <h2 className="font-bold">
-                  {bookingInfo.theater} | {bookingInfo.cinema} | Remaining ({bookingInfo.remaining.current}/{bookingInfo.remaining.total})
-                </h2>
-                <p className="text-sm text-gray-700">
-                  {bookingInfo.date} {bookingInfo.showtime} ~ {bookingInfo.date} {bookingInfo.endTime}
-                </p>
+                {loadingSeats ? (
+                  <div className="text-center py-2">
+                    <p className="font-bold">Loading booking information...</p>
+                  </div>
+                ) : (
+                  <>
+                    <h2 className="font-bold">
+                      {bookingInfo.theater} | {bookingInfo.cinema} | Remaining ({bookingInfo.remaining.current}/{bookingInfo.remaining.total})
+                    </h2>
+                    <p className="text-sm text-gray-700">
+                      {bookingInfo.date} {bookingInfo.showtime} ~ {bookingInfo.date} {bookingInfo.endTime}
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           </div>
 
           {/* Seat Selection Content */}
           <div className="p-8">
-            {/* People / Seats Header */}
-            <div className="bg-gray-300 text-center py-2 mb-6">
-              <h3 className="font-bold text-gray-900">People / Seats</h3>
-            </div>
+            {loadingSeats ? (
+              <div className="text-center py-20">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+                <p className="mt-4 text-gray-600">Loading seats...</p>
+              </div>
+            ) : (
+              <>
+                {/* People / Seats Header */}
+                <div className="bg-gray-300 text-center py-2 mb-6">
+                  <h3 className="font-bold text-gray-900">People / Seats</h3>
+                </div>
 
             {/* Screen */}
             <div className="mb-8">
@@ -491,23 +538,29 @@ export default function BookingPage() {
             {/* Seat Map */}
             <div className="flex justify-center mb-8">
               <div className="inline-block">
-                {seatRows.map((rowData, rowIdx) => (
-                  <div key={rowIdx} className="flex items-center justify-center gap-1 mb-1">
-                    {rowData.seats.map((seat, seatIdx) => {
-                      const seatNumber = seat;
-                      return (
-                        <button
-                          key={seatIdx}
-                          onClick={() => handleSeatClick(seat)}
-                          disabled={occupiedSeats.includes(seat) || unavailableSeats.includes(seat)}
-                          className={`w-8 h-8 text-xs font-semibold border rounded transition-colors ${getSeatColor(seat, rowData.type)}`}
-                        >
-                          {seatNumber}
-                        </button>
-                      );
-                    })}
+                {seatRows.length === 0 ? (
+                  <div className="text-center py-10 text-gray-500">
+                    No seats available
                   </div>
-                ))}
+                ) : (
+                  seatRows.map((rowData, rowIdx) => (
+                    <div key={rowIdx} className="flex items-center justify-center gap-1 mb-1">
+                      {rowData.seats.map((seat, seatIdx) => {
+                        const seatNumber = seat;
+                        return (
+                          <button
+                            key={seatIdx}
+                            onClick={() => handleSeatClick(seat)}
+                            disabled={occupiedSeats.includes(seat) || unavailableSeats.includes(seat)}
+                            className={`w-8 h-8 text-xs font-semibold border rounded transition-colors ${getSeatColor(seat, rowData.type)}`}
+                          >
+                            {seatNumber}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
@@ -553,26 +606,36 @@ export default function BookingPage() {
 
                 {/* Movie Info */}
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-24 bg-gradient-to-br from-purple-600 via-purple-500 to-purple-700 rounded flex items-center justify-center">
-                    <p className="text-white text-xs font-bold text-center px-2">
-                      {bookingInfo.movie.title.split(':')[0]}
-                    </p>
+                  <div className="w-16 h-24 rounded overflow-hidden flex-shrink-0">
+                    {moviePoster ? (
+                      <img 
+                        src={moviePoster} 
+                        alt={bookingInfo.movie.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-purple-600 via-purple-500 to-purple-700 flex items-center justify-center">
+                        <p className="text-white text-xs font-bold text-center px-2">
+                          {bookingInfo.movie.title ? bookingInfo.movie.title.split(':')[0] : 'Loading...'}
+                        </p>
+                      </div>
+                    )}
                   </div>
                   <div className="text-left">
-                    <p className="font-bold text-lg">{bookingInfo.movie.title}</p>
-                    <p className="text-sm text-gray-300">{bookingInfo.movie.format}</p>
-                    <p className="text-sm text-gray-300">{bookingInfo.movie.rating}</p>
+                    <p className="font-bold text-lg">{bookingInfo.movie.title || 'Loading...'}</p>
+                    <p className="text-sm text-gray-300">{bookingInfo.movie.format || '-'}</p>
+                    <p className="text-sm text-gray-300">{bookingInfo.movie.rating || '-'}</p>
                   </div>
                 </div>
 
                 {/* Theater Info */}
                 <div className="text-left">
                   <p className="text-sm text-gray-300">Theater</p>
-                  <p className="font-bold">{bookingInfo.theater}</p>
+                  <p className="font-bold">{bookingInfo.theater || 'Loading...'}</p>
                   <p className="text-sm text-gray-300">Showtimes</p>
-                  <p className="font-bold">{bookingInfo.showtime}, {bookingInfo.date}</p>
+                  <p className="font-bold">{bookingInfo.showtime || '-'}, {bookingInfo.date || '-'}</p>
                   <p className="text-sm text-gray-300">Screen</p>
-                  <p className="font-bold">{bookingInfo.movie.screen}</p>
+                  <p className="font-bold">{bookingInfo.movie.screen || '-'}</p>
                 </div>
 
                 {/* Pricing */}
@@ -588,7 +651,7 @@ export default function BookingPage() {
                 {/* Next Button */}
                 <button
                   onClick={handleNext}
-                  disabled={isLoading || selectedSeats.length === 0}
+                  disabled={isLoading || selectedSeats.length === 0 || loadingSeats}
                   className="flex items-center gap-2 bg-red-600 hover:bg-red-700 px-6 py-3 rounded transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
                   {isLoading ? (
@@ -604,6 +667,8 @@ export default function BookingPage() {
                 </button>
               </div>
             </div>
+            </>
+            )}
           </div>
         </div>
 

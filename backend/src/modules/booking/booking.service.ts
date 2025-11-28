@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { StartBookingDto } from './dto/start-booking.dto';
 import { UpdateFwbDto } from './dto/update-fwb.dto';
@@ -71,6 +71,39 @@ export class BookingService {
     } catch (error: any) {
       throw new InternalServerErrorException(
         error.sqlMessage || error.message || 'Failed to update F&B',
+      );
+    }
+  }
+
+  /**
+   * Get booking details by ID (for countdown timer)
+   */
+  async getBookingDetails(bookingId: number) {
+    try {
+      const [booking] = await this.dataSource.query(
+        `SELECT 
+          id,
+          customer_id AS customerId,
+          status,
+          created_time_at AS createdAt,
+          booking_method AS bookingMethod,
+          is_gift AS isGift
+        FROM booking
+        WHERE id = ?`,
+        [bookingId]
+      );
+
+      if (!booking) {
+        throw new NotFoundException(`Booking ${bookingId} not found`);
+      }
+
+      return booking;
+    } catch (error: any) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        error.sqlMessage || error.message || 'Failed to get booking details'
       );
     }
   }
