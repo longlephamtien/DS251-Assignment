@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Icon from '../components/common/Icon';
 import Notification from '../components/common/Notification';
+import ConfirmDialog from '../components/common/ConfirmDialog';
 import { useBooking } from '../context/BookingContext';
-import { startBooking, confirmPayment, cancelPayment, generateTransactionId, calculateFinalAmount, getBookingDetails } from '../api/bookingService';
-import { couponService } from '../services';
+import { bookingService, paymentService, couponService } from '../services';
 import atmLogo from '../assets/media/payment/atm-logo.png';
 import visaMasterLogo from '../assets/media/payment/visa-mastercard-logo.png';
 import momoLogo from '../assets/media/payment/momo-logo.png';
@@ -18,47 +18,27 @@ export default function PaymentPage() {
   const location = useLocation();
   const { bookingData, updateBookingData } = useBooking();
 
-  console.log('🔍 URL Params:', { date, routeBookingId });
-  console.log('🔍 BookingContext:', bookingData);
-
-  // Get booking data from location state (coming from My Bookings) or context (booking flow)
   const [currentBookingId, setCurrentBookingId] = useState(() => {
-    // ONLY use bookingId from URL (from "My Bookings" or "Resume Payment")
-    // This is the ONLY authoritative source
     if (routeBookingId) {
-      console.log('📍 Using booking ID from URL (My Bookings):', routeBookingId);
       return parseInt(routeBookingId, 10);
     }
-
-    // Otherwise: coming from normal booking flow (seat -> combo -> payment)
-    // Always create NEW booking - ignore any old bookingId in context
-    console.log('🆕 Normal booking flow - will create new booking');
     return null;
   });
 
-  console.log('🎯 Initial currentBookingId:', currentBookingId, typeof currentBookingId);
-
-  // Use ref to prevent double booking creation (persists across re-renders)
   const bookingCreatedRef = useRef(false);
 
-  // Create booking on mount if coming from booking flow (no bookingId yet)
   useEffect(() => {
     const createBookingIfNeeded = async () => {
-      // Skip if we already have a bookingId (from URL or context)
       if (currentBookingId) {
-        console.log('✅ Booking already exists:', currentBookingId);
         return;
       }
 
-      // Skip if booking already created (prevent double call in StrictMode)
       if (bookingCreatedRef.current) {
-        console.log('⏳ Booking creation already in progress or completed, skipping...');
         return;
       }
 
-      // Skip if no seat/showtime data (invalid state)
       if (!bookingData.customerId || !bookingData.showtimeId || !bookingData.seatIds) {
-        console.error('❌ Missing booking data:', bookingData);
+        console.error('Missing booking data:', bookingData);
         setNotification({
           isOpen: true,
           title: 'Error',
@@ -69,20 +49,18 @@ export default function PaymentPage() {
         return;
       }
 
-      // Mark as creating to prevent duplicate calls
       bookingCreatedRef.current = true;
-      console.log('🚀 Creating new booking with seats + F&B...');
 
       try {
-        const response = await startBooking(
+        const response = await bookingService.startBooking(
           bookingData.customerId,
           bookingData.showtimeId,
           bookingData.seatIds,
-          bookingData.fwbItems || null // F&B items from ComboPage
+          bookingData.fwbItems || null
         );
 
         const newBookingId = parseInt(response.bookingId);
-        console.log('✅ Booking created:', newBookingId);
+        console.log('Booking created:', newBookingId);
 
         setCurrentBookingId(newBookingId);
         updateBookingData({ bookingId: newBookingId });
@@ -90,7 +68,7 @@ export default function PaymentPage() {
         // Update URL to include bookingId so refresh works
         navigate(`/payment/${newBookingId}`, { replace: true });
       } catch (error) {
-        console.error('❌ Failed to create booking:', error);
+        console.error('Failed to create booking:', error);
         // Reset flag on error so user can retry
         bookingCreatedRef.current = false;
         setNotification({
@@ -104,9 +82,8 @@ export default function PaymentPage() {
     };
 
     createBookingIfNeeded();
-  }, []); // Run once on mount
+  }, []);
 
-  // Check if we have required data (after booking creation attempt)
   useEffect(() => {
     if (!currentBookingId && !bookingData.seatIds) {
       setNotification({
@@ -135,7 +112,7 @@ export default function PaymentPage() {
   const [selectedPayment, setSelectedPayment] = useState('');
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [countdown, setCountdown] = useState(300); // 5 minutes in seconds
-  const [bookingCreatedAt, setBookingCreatedAt] = useState(null); // Thời gian tạo booking từ DB
+  const [bookingCreatedAt, setBookingCreatedAt] = useState(null);
   const [expandedSection, setExpandedSection] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [notification, setNotification] = useState({
@@ -145,15 +122,21 @@ export default function PaymentPage() {
     type: 'info'
   });
 
-  // Coupon states - Support multiple coupons
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
+
   const [couponCode, setCouponCode] = useState('');
-  const [appliedCoupons, setAppliedCoupons] = useState([]); // Changed to array
+  const [appliedCoupons, setAppliedCoupons] = useState([]);
   const [couponError, setCouponError] = useState('');
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
   const [availableCoupons, setAvailableCoupons] = useState([]);
   const [isLoadingCoupons, setIsLoadingCoupons] = useState(false);
+  const [moviePoster, setMoviePoster] = useState(null);
 
-  // Price breakdown from backend
   const [priceBreakdown, setPriceBreakdown] = useState({
     baseSeatPrice: 0,
     fwbPrice: 0,
@@ -165,40 +148,32 @@ export default function PaymentPage() {
     finalAmount: 0
   });
 
-
-  console.log("Booking Data:", bookingData);
-
   const toggleSection = (sectionId) => {
     setExpandedSection(expandedSection === sectionId ? null : sectionId);
   };
 
-  // Load booking details (including created_time_at) and price breakdown
   useEffect(() => {
     const loadBookingData = async () => {
       if (!currentBookingId) {
-        console.log('⚠️ No booking ID, skipping data load');
+        console.log('No booking ID, skipping data load');
         return;
       }
 
-      console.log('🔄 Loading booking data for:', currentBookingId);
+      console.log('Loading booking data for:', currentBookingId);
 
       try {
-        // Load booking details to get created_time_at
-        console.log('📡 Fetching booking details for ID:', currentBookingId);
-        const bookingDetails = await getBookingDetails(currentBookingId);
-        console.log('✅ Booking details loaded:', bookingDetails);
-        console.log('📅 Created at:', bookingDetails.createdAt, typeof bookingDetails.createdAt);
+        const bookingDetails = await bookingService.getBookingDetails(currentBookingId);
+        console.log('Booking details loaded:', bookingDetails);
+        console.log('Created at:', bookingDetails.createdAt, typeof bookingDetails.createdAt);
 
         setBookingCreatedAt(bookingDetails.createdAt);
 
-        // Load price breakdown
-        const breakdown = await calculateFinalAmount(currentBookingId);
-        console.log('✅ Price breakdown loaded:', breakdown);
+        const breakdown = await paymentService.calculateFinalAmount(currentBookingId);
+        console.log('Price breakdown loaded:', breakdown);
         setPriceBreakdown(breakdown);
       } catch (error) {
-        console.error('❌ Failed to load booking data:', error);
-        console.error('❌ Error details:', error.message, error.stack);
-        // Fallback to basic calculation
+        console.error('Failed to load booking data:', error);
+        console.error('Error details:', error.message, error.stack);
         setPriceBreakdown({
           baseSeatPrice: seatTotal || 0,
           fwbPrice: comboTotal || 0,
@@ -213,37 +188,51 @@ export default function PaymentPage() {
     };
 
     loadBookingData();
-  }, [currentBookingId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentBookingId]);
 
-  // Countdown timer - Tính dựa trên created_time_at từ database
+  useEffect(() => {
+    const loadMoviePoster = () => {
+      const posterFile = bookingData.movieData?.posterFile || bookingInfo?.movie?.posterFile;
+      
+      if (posterFile) {
+        try {
+          const posterImg = require(`../assets/media/movies/${posterFile}`);
+          setMoviePoster(posterImg);
+        } catch (error) {
+          console.warn(`Poster not found: ${posterFile}`);
+          setMoviePoster(null);
+        }
+      } else {
+        setMoviePoster(null);
+      }
+    };
+
+    loadMoviePoster();
+  }, [bookingData.movieData?.posterFile, bookingInfo?.movie?.posterFile]);
+
   useEffect(() => {
     const TIMEOUT_MINUTES = 5;
     let expiryTime;
 
     if (!bookingCreatedAt) {
-      console.log('⏳ No booking created time yet - using default 5 min countdown');
-      // Fallback: start countdown from now if no createdAt yet
+      console.log('No booking created time yet - using default 5 min countdown');
       expiryTime = Date.now() + (TIMEOUT_MINUTES * 60 * 1000);
     } else {
-      // Parse UTC timestamp from database (already in UTC format)
       const createdTime = new Date(bookingCreatedAt).getTime();
       expiryTime = createdTime + (TIMEOUT_MINUTES * 60 * 1000);
 
-      // Get current time in milliseconds
       const now = Date.now();
       const ageInSeconds = Math.floor((now - createdTime) / 1000);
 
-      console.log('⏰ Booking created at (UTC):', bookingCreatedAt);
-      console.log('⏰ Booking created at (Local):', new Date(createdTime).toString());
-      console.log('⏰ Will expire at:', new Date(expiryTime).toString());
-      console.log('⏰ Booking age:', ageInSeconds, 'seconds');
-      console.log('⏰ Current time:', new Date(now).toString());
+      console.log('Booking created at (UTC):', bookingCreatedAt);
+      console.log(' Booking created at (Local):', new Date(createdTime).toString());
+      console.log('Will expire at:', new Date(expiryTime).toString());
+      console.log('Booking age:', ageInSeconds, 'seconds');
+      console.log('Current time:', new Date(now).toString());
 
-      // Safety check: If booking is already > 5 mins old, it might be stale data
       if (ageInSeconds >= TIMEOUT_MINUTES * 60) {
-        console.error('⚠️ WARNING: Booking is already expired! Age:', ageInSeconds, 'seconds');
-        console.error('⚠️ This might be stale data or system clock issue');
-        // Don't immediately timeout - let backend handle it
+        console.error('WARNING: Booking is already expired! Age:', ageInSeconds, 'seconds');
+        console.error('This might be stale data or system clock issue');
         return;
       }
     }
@@ -261,14 +250,13 @@ export default function PaymentPage() {
       }
     }, 1000);
 
-    // Calculate initial countdown immediately
     const now = Date.now();
     const remainingMs = expiryTime - now;
     const remainingSec = Math.max(0, Math.floor(remainingMs / 1000));
     setCountdown(remainingSec);
 
     return () => clearInterval(timer);
-  }, [bookingCreatedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bookingCreatedAt]);
 
   const handleTimeout = async () => {
     if (!currentBookingId) {
@@ -276,7 +264,6 @@ export default function PaymentPage() {
       return;
     }
 
-    // Double-check booking age before cancelling
     if (bookingCreatedAt) {
       const createdTime = new Date(bookingCreatedAt).getTime();
       const nowAtTimeout = new Date().getTime();
@@ -284,17 +271,14 @@ export default function PaymentPage() {
 
       console.log('⏰ handleTimeout - Booking age:', ageInSeconds, 'seconds');
 
-      // Defensive check: only proceed if truly > 5 mins
       if (ageInSeconds < 300) {
         console.error('⚠️ FALSE TIMEOUT! Booking is only', ageInSeconds, 'seconds old');
         return;
       }
     }
 
-    console.log('🚨 Timeout confirmed - cancelling booking', currentBookingId);
-
     try {
-      await cancelPayment(currentBookingId, 'Payment timeout - 5 minutes exceeded');
+      await paymentService.cancelPayment(currentBookingId, 'Payment timeout - 5 minutes exceeded');
       setNotification({
         isOpen: true,
         title: 'Payment Timeout',
@@ -302,7 +286,6 @@ export default function PaymentPage() {
         type: 'error'
       });
 
-      // Redirect to home after 3 seconds
       setTimeout(() => {
         navigate('/');
       }, 3000);
@@ -319,7 +302,6 @@ export default function PaymentPage() {
 
   const { mins, secs } = formatTime(countdown);
 
-  // Load available coupons when coupon section is expanded
   useEffect(() => {
     const loadCoupons = async () => {
       if (expandedSection === 'coupon' && availableCoupons.length === 0) {
@@ -330,7 +312,6 @@ export default function PaymentPage() {
           setAvailableCoupons(available);
         } catch (error) {
           console.error('Failed to load coupons:', error);
-          // User might not be logged in, that's okay
           setAvailableCoupons([]);
         } finally {
           setIsLoadingCoupons(false);
@@ -338,14 +319,18 @@ export default function PaymentPage() {
       }
     };
     loadCoupons();
-  }, [expandedSection]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [expandedSection]);
 
   const handleApplyPoints = () => {
     if (pointsToUse > cgvPoints) {
-      alert('Not enough points');
+      setNotification({
+        isOpen: true,
+        title: 'Insufficient Points',
+        message: 'You do not have enough points to apply.',
+        type: 'warning'
+      });
       return;
     }
-    // Apply points logic
   };
 
   const handleApplyCoupon = async () => {
@@ -354,7 +339,6 @@ export default function PaymentPage() {
       return;
     }
 
-    // Check if coupon already applied
     if (appliedCoupons.find(c => c.couponCode.toUpperCase() === couponCode.toUpperCase())) {
       setCouponError('This coupon has already been applied');
       return;
@@ -364,18 +348,14 @@ export default function PaymentPage() {
     setCouponError('');
 
     try {
-      // First validate the coupon
       const couponData = await couponService.validateCoupon(couponCode);
-
-      // Then apply it to the booking via backend
       await couponService.applyCoupon(currentBookingId, couponData.couponId);
 
-      // Reload price breakdown to get updated discount
-      const breakdown = await calculateFinalAmount(currentBookingId);
+      const breakdown = await paymentService.calculateFinalAmount(currentBookingId);
       setPriceBreakdown(breakdown);
 
       setAppliedCoupons([...appliedCoupons, couponData]);
-      setCouponCode(''); // Clear input after successful apply
+      setCouponCode('');
       setCouponError('');
       setNotification({
         isOpen: true,
@@ -402,7 +382,6 @@ export default function PaymentPage() {
   };
 
   const handleSelectCoupon = async (coupon) => {
-    // Check if coupon already applied
     if (appliedCoupons.find(c => c.couponId === coupon.couponId)) {
       setNotification({
         isOpen: true,
@@ -414,11 +393,9 @@ export default function PaymentPage() {
     }
 
     try {
-      // Apply coupon to booking via backend
       await couponService.applyCoupon(currentBookingId, parseInt(coupon.couponId));
 
-      // Reload price breakdown to get updated discount
-      const breakdown = await calculateFinalAmount(currentBookingId);
+      const breakdown = await paymentService.calculateFinalAmount(currentBookingId);
       console.log('Price breakdown after applying coupon:', breakdown);
       setPriceBreakdown(breakdown);
 
@@ -448,7 +425,6 @@ export default function PaymentPage() {
     }
   };
 
-  // Calculate total discount from backend data
   const totalDiscount = (priceBreakdown.boxOfficeDiscount || 0) +
     (priceBreakdown.concessionDiscount || 0) +
     (priceBreakdown.couponDiscount || 0);
@@ -499,9 +475,8 @@ export default function PaymentPage() {
       };
 
       const paymentMethod = paymentMethodMap[selectedPayment] || selectedPayment;
-      const transactionId = generateTransactionId();
+      const transactionId = paymentService.generateTransactionId();
 
-      // Calculate how long payment took (ensure minimum 1 minute)
       const elapsedSeconds = 300 - countdown;
       const durationInMinutes = Math.max(1, Math.ceil(elapsedSeconds / 60));
 
@@ -511,8 +486,7 @@ export default function PaymentPage() {
         durationInMinutes
       });
 
-      // Call API to confirm payment
-      const response = await confirmPayment(
+      const response = await paymentService.confirmPayment(
         parseInt(currentBookingId),
         paymentMethod,
         transactionId,
@@ -520,33 +494,23 @@ export default function PaymentPage() {
         durationInMinutes
       );
 
-      // Apply all coupons to the booking after successful payment
       if (appliedCoupons.length > 0) {
-        console.log('🎟️ Applying coupons to booking:', appliedCoupons.map(c => c.couponId));
         try {
           for (const coupon of appliedCoupons) {
-            console.log('🎟️ Applying coupon:', coupon.couponId, 'to booking:', currentBookingId);
             const result = await couponService.applyCoupon(parseInt(currentBookingId), coupon.couponId);
-            console.log('✅ Coupon applied successfully:', result);
           }
-          console.log('🎟️ All coupons applied, reloading coupon list...');
-          // Reload available coupons after applying to refresh the list
           try {
             const couponsData = await couponService.getMyCoupons();
             const available = couponsData.coupons.filter(c => c.state === 'Available');
-            console.log('✅ Reloaded coupons, available count:', available.length);
             setAvailableCoupons(available);
           } catch (reloadError) {
-            console.error('❌ Failed to reload coupons:', reloadError);
+            console.error('Failed to reload coupons:', reloadError);
           }
         } catch (couponError) {
-          console.error('❌ Failed to apply coupons to booking:', couponError);
-          // Payment already succeeded, so just log the error
-          // Coupons might need manual intervention
+          console.error('Failed to apply coupons to booking:', couponError);
         }
       }
 
-      // Show success notification
       setNotification({
         isOpen: true,
         title: 'Payment Successful',
@@ -554,10 +518,6 @@ export default function PaymentPage() {
         type: 'success'
       });
 
-      // Clear booking data
-      // clearBookingData(); // Uncomment if you want to clear after success
-
-      // Redirect to customer bookings page after 2 seconds
       setTimeout(() => {
         navigate('/customer', { state: { tab: 'bookings', paymentSuccess: true } });
       }, 2000);
@@ -574,8 +534,31 @@ export default function PaymentPage() {
     }
   };
 
-  const handlePrevious = () => {
-    navigate(-1);
+  const handlePrevious = async () => {
+    if (!currentBookingId) {
+      navigate(-1);
+      return;
+    }
+
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Cancel Booking',
+      message: 'Going back will cancel this booking. Do you want to continue?',
+      onConfirm: async () => {
+        try {
+          await paymentService.cancelPayment(currentBookingId, 'User navigated back');
+          navigate(-1);
+        } catch (error) {
+          console.error('Failed to cancel booking:', error);
+          setNotification({
+            isOpen: true,
+            title: 'Error',
+            message: 'Failed to cancel booking. Please try again.',
+            type: 'error'
+          });
+        }
+      }
+    });
   };
 
   return (
@@ -1075,43 +1058,24 @@ export default function PaymentPage() {
                   <Icon name="chevron-left" className="w-5 h-5" />
                   <span className="font-semibold">PREVIOUS</span>
                 </button>
-
-                <button
-                  onClick={async () => {
-                    if (window.confirm('Are you sure you want to cancel this booking?')) {
-                      try {
-                        await cancelPayment(currentBookingId, 'User cancelled payment');
-                        setNotification({
-                          isOpen: true,
-                          title: 'Booking Cancelled',
-                          message: 'Your booking has been cancelled successfully.',
-                          type: 'success'
-                        });
-                        setTimeout(() => navigate('/'), 2000);
-                      } catch (error) {
-                        console.error('Failed to cancel:', error);
-                        setNotification({
-                          isOpen: true,
-                          title: 'Error',
-                          message: 'Failed to cancel booking',
-                          type: 'error'
-                        });
-                      }
-                    }
-                  }}
-                  className="flex items-center gap-2 bg-red-600 hover:bg-red-700 px-6 py-3 rounded transition-colors"
-                >
-                  <Icon name="x" className="w-5 h-5" />
-                  <span className="font-semibold">CANCEL PAYMENT</span>
-                </button>
               </div>
 
               {/* Movie Info */}
               <div className="flex items-center gap-4">
-                <div className="w-16 h-24 bg-gradient-to-br from-purple-600 via-purple-500 to-purple-700 rounded flex items-center justify-center">
-                  <p className="text-white text-xs font-bold text-center px-2">
-                    {bookingInfo?.movie?.title?.split(':')[0] || 'MOVIE'}
-                  </p>
+                <div className="w-16 h-24 rounded overflow-hidden flex-shrink-0">
+                  {moviePoster ? (
+                    <img 
+                      src={moviePoster} 
+                      alt={bookingInfo?.movie?.title || 'Movie'}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-purple-600 via-purple-500 to-purple-700 flex items-center justify-center">
+                      <p className="text-white text-xs font-bold text-center px-2">
+                        {bookingInfo?.movie?.title?.split(':')[0] || 'MOVIE'}
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <div className="text-left">
                   <p className="font-bold text-lg">{bookingInfo?.movie?.title || 'WICKED: FOR GOOD'}</p>
@@ -1176,6 +1140,18 @@ export default function PaymentPage() {
         title={notification.title}
         message={notification.message}
         type={notification.type}
+      />
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText="Yes"
+        cancelText="No"
+        type="danger"
       />
     </div>
   );

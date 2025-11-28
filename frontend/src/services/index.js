@@ -10,3 +10,5 @@ export { giftService } from './gift.service';
 export { showtimeSeatService } from './showtime_seat.service';
 export { fwbMenuService } from './fwb_menu.service';
 export { default as refundService } from './refund.service';
+export { bookingService } from './booking.service';
+export { paymentService } from './payment.service';

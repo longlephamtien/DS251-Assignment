@@ -15,8 +15,10 @@ export default function ComboPage() {
   // Get booking data from location state or context
   const { selectedSeats = bookingData.selectedSeats || [], bookingInfo = bookingData.bookingInfo || {}, seatTotal = bookingData.seatTotal || 0, seatsByType = bookingData.seatsByType || {} } = location.state || bookingData;
 
+  // Movie poster state
+  const [moviePoster, setMoviePoster] = useState(null);
+  
   const [combos, setCombos] = useState([]);
-
   const [selectedCombos, setSelectedCombos] = useState(bookingData.selectedCombos || {});
   const [isLoading, setIsLoading] = useState(false);
   const [notification, setNotification] = useState({
@@ -35,6 +37,19 @@ export default function ComboPage() {
       totalPrice: seatTotal + comboTotal
     });
   }, [selectedCombos]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load movie poster
+  useEffect(() => {
+    if (bookingData.movieData?.posterFile) {
+      try {
+        const posterImg = require(`../assets/media/movies/${bookingData.movieData.posterFile}`);
+        setMoviePoster(posterImg);
+      } catch (error) {
+        console.warn(`Poster not found: ${bookingData.movieData.posterFile}`);
+        setMoviePoster(null);
+      }
+    }
+  }, [bookingData.movieData]);
 
   // Fetch FWB menu items from API
   useEffect(() => {
@@ -236,10 +251,20 @@ export default function ComboPage() {
 
                 {/* Movie Info */}
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-24 bg-gradient-to-br from-purple-600 via-purple-500 to-purple-700 rounded flex items-center justify-center">
-                    <p className="text-white text-xs font-bold text-center px-2">
-                      {bookingInfo?.movie?.title?.split(':')[0] || 'MOVIE'}
-                    </p>
+                  <div className="w-16 h-24 rounded overflow-hidden flex-shrink-0">
+                    {moviePoster ? (
+                      <img 
+                        src={moviePoster} 
+                        alt={bookingInfo?.movie?.title || 'Movie'}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-purple-600 via-purple-500 to-purple-700 flex items-center justify-center">
+                        <p className="text-white text-xs font-bold text-center px-2">
+                          {bookingInfo?.movie?.title?.split(':')[0] || 'MOVIE'}
+                        </p>
+                      </div>
+                    )}
                   </div>
                   <div className="text-left">
                     <p className="font-bold text-lg">{bookingInfo?.movie?.title || 'Movie Title'}</p>

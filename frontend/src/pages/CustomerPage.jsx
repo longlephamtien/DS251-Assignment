@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../components/common/Icon';
 import Notification from '../components/common/Notification';
+import ConfirmDialog from '../components/common/ConfirmDialog';
 import MembershipCard from '../components/MembershipCard';
 import { getMyBookings } from '../api/bookingService';
 import { authService, membershipService, dashboardService, couponService, transactionService, pointService, giftService, refundService } from '../services';
@@ -945,6 +946,12 @@ const BookingHistoryTab = () => {
   const [ticketModal, setTicketModal] = useState({ isOpen: false, booking: null });
   const [refundForm, setRefundForm] = useState({ reason: '', amount: 0 });
   const [notification, setNotification] = useState({ isOpen: false, title: '', message: '', type: 'info' });
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
 
   useEffect(() => {
     fetchBookings();
@@ -1172,31 +1179,46 @@ const BookingHistoryTab = () => {
                             </button>
 
                             <button
-                              onClick={async () => {
-                                if (window.confirm('Are you sure you want to cancel this booking?')) {
-                                  try {
-                                    const response = await fetch(`${require('../config').default.apiUrl}/payment/cancel`, {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({
-                                        bookingId: parseInt(booking.id),
-                                        reason: 'User cancelled from My Bookings'
-                                      })
-                                    });
+                              onClick={() => {
+                                setConfirmDialog({
+                                  isOpen: true,
+                                  title: 'Cancel Booking',
+                                  message: 'Are you sure you want to cancel this booking?',
+                                  onConfirm: async () => {
+                                    try {
+                                      const response = await fetch(`${require('../config').default.apiUrl}/payment/cancel`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                          bookingId: parseInt(booking.id),
+                                          reason: 'User cancelled from My Bookings'
+                                        })
+                                      });
 
-                                    if (!response.ok) {
-                                      const error = await response.json();
-                                      throw new Error(error.message || 'Failed to cancel booking');
+                                      if (!response.ok) {
+                                        const error = await response.json();
+                                        throw new Error(error.message || 'Failed to cancel booking');
+                                      }
+
+                                      setNotification({
+                                        isOpen: true,
+                                        title: 'Success',
+                                        message: 'Booking cancelled successfully',
+                                        type: 'success'
+                                      });
+                                      // Refresh bookings after short delay
+                                      setTimeout(() => window.location.reload(), 1500);
+                                    } catch (error) {
+                                      console.error('Failed to cancel:', error);
+                                      setNotification({
+                                        isOpen: true,
+                                        title: 'Error',
+                                        message: `Failed to cancel booking: ${error.message}`,
+                                        type: 'error'
+                                      });
                                     }
-
-                                    alert('Booking cancelled successfully');
-                                    // Refresh bookings
-                                    window.location.reload();
-                                  } catch (error) {
-                                    console.error('Failed to cancel:', error);
-                                    alert(`Failed to cancel booking: ${error.message}`);
                                   }
-                                }
+                                });
                               }}
                               className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded flex items-center"
                             >
@@ -1361,6 +1383,17 @@ const BookingHistoryTab = () => {
         message={notification.message}
         type={notification.type}
         onClose={() => setNotification({ ...notification, isOpen: false })}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText="Yes"
+        cancelText="No"
+        type="danger"
       />
     </div>
   );

@@ -23,6 +23,7 @@ export const BookingProvider = ({ children }) => {
     fwbItems: [], // F&B items for API
     comboTotal: 0,
     bookingInfo: null,
+    movieData: null, // Movie data including posterFile
     totalPrice: 0
   });
 
@@ -43,6 +44,7 @@ export const BookingProvider = ({ children }) => {
       fwbItems: [],
       comboTotal: 0,
       bookingInfo: null,
+      movieData: null,
       totalPrice: 0
     });
   };

@@ -40,6 +40,7 @@ export default function BookingPage() {
   const [showtimeSeats, setShowtimeSeats] = useState([]);
   const [loadingSeats, setLoadingSeats] = useState(false);
   const [moviePoster, setMoviePoster] = useState(null);
+  const [movieData, setMovieData] = useState(null);
 
   // Fetch showtime and seat data from API
   useEffect(() => {
@@ -71,6 +72,7 @@ export default function BookingPage() {
           // Fetch movie data
           if (showtimeData.movie_id) {
             movieData = await movieService.getMovieById(parseInt(showtimeData.movie_id));
+            setMovieData(movieData); // Save to state
             
             // Load movie poster
             if (movieData?.posterFile) {
@@ -197,7 +199,8 @@ export default function BookingPage() {
         selectedSeats,
         seatTotal: calculateTotal(),
         seatsByType,
-        bookingInfo
+        bookingInfo,
+        movieData // Add movieData to context from state
       });
     }
   }, [selectedSeats]); // eslint-disable-line react-hooks/exhaustive-deps
