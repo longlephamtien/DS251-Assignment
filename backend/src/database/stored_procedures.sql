@@ -1,7 +1,7 @@
 -- ============================================
 -- Stored Procedures
 -- Database: bkinema
--- Generated: 2025-11-28T15:39:01.337Z
+-- Generated: 2025-11-28T16:54:41.138Z
 -- ============================================
 
 -- Procedure: sp_apply_coupon

@@ -96,4 +96,46 @@ export class TheaterController {
             );
         }
     }
+
+    /**
+     * Get sales report for theater
+     * GET /api/theaters/:id/sales-report?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+     */
+    @Get(':id/sales-report')
+    async getSalesReport(
+        @Param('id') id: number,
+        @Query('startDate') startDate: string,
+        @Query('endDate') endDate: string,
+    ): Promise<ApiResponseDto<any[]>> {
+        try {
+            if (!startDate || !endDate) {
+                throw new HttpException(
+                    {
+                        success: false,
+                        message: 'Both startDate and endDate are required',
+                    },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+
+            const report = await this.theaterService.getSalesReport(Number(id), startDate, endDate);
+            
+            return {
+                success: true,
+                data: report,
+                message: 'Sales report generated successfully',
+            };
+        } catch (error) {
+            if (error instanceof HttpException) {
+                throw error;
+            }
+            throw new HttpException(
+                {
+                    success: false,
+                    message: error.message || 'Failed to generate sales report',
+                },
+                HttpStatus.BAD_REQUEST,
+            );
+        }
+    }
 }

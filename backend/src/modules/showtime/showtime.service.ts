@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { ShowtimeResponseDto } from './showtime.dto';
 import { Showtime } from './showtime.entity';
 
@@ -11,6 +11,7 @@ export class ShowtimeService {
     constructor(
         @InjectRepository(Showtime)
         private showtimeRepository: Repository<Showtime>,
+        private dataSource: DataSource,
     ) { }
 
     /**
@@ -53,6 +54,29 @@ export class ShowtimeService {
         } catch (error) {
             this.logger.error('Error fetching showtime:', error);
             throw error;
+        }
+    }
+
+    /**
+     * Delete showtime by ID (Admin/Manager only)
+     * @param showtimeId - The ID of the showtime to delete
+     * @param staffId - The ID of the staff performing the deletion
+     * @returns void
+     */
+    async deleteShowtime(showtimeId: number, staffId: number): Promise<void> {
+        try {
+            this.logger.log(`Staff ${staffId} attempting to delete showtime ${showtimeId}`);
+
+            // Call stored procedure sp_delete_showtime
+            await this.dataSource.query(
+                'CALL sp_delete_showtime(?, ?)',
+                [showtimeId, staffId],
+            );
+
+            this.logger.log(`Showtime ${showtimeId} deleted successfully`);
+        } catch (error) {
+            this.logger.error(`Error deleting showtime: ${error.message}`);
+            throw new BadRequestException(error.message || 'Failed to delete showtime');
         }
     }
 }

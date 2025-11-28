@@ -4,8 +4,7 @@ import Icon from '../components/common/Icon';
 import Notification from '../components/common/Notification';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import MembershipCard from '../components/MembershipCard';
-import { getMyBookings } from '../api/bookingService';
-import { authService, membershipService, dashboardService, couponService, transactionService, pointService, giftService, refundService } from '../services';
+import { authService, membershipService, dashboardService, couponService, transactionService, pointService, giftService, refundService, bookingService } from '../services';
 
 // Resolve poster path for either local asset filename or remote URL
 function resolvePoster(ref) {
@@ -960,7 +959,7 @@ const BookingHistoryTab = () => {
   const fetchBookings = async () => {
     try {
       setLoading(true);
-      const data = await getMyBookings();
+      const data = await bookingService.getMyBookings();
       setBookings(data || []);
     } catch (error) {
       console.error('Failed to fetch bookings:', error);
@@ -1417,7 +1416,7 @@ const RefundTab = () => {
       setLoading(true);
       const [refundData, bookingData] = await Promise.all([
         refundService.getRefundHistory(),
-        getMyBookings()
+        bookingService.getMyBookings()
       ]);
       setRefunds(refundData || []);
       // Filter only Paid bookings that can be refunded
