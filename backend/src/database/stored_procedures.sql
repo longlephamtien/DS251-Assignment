@@ -1,7 +1,7 @@
 -- ============================================
 -- Stored Procedures
 -- Database: bkinema
--- Generated: 2025-11-28T15:29:25.082Z
+-- Generated: 2025-11-28T15:35:29.570Z
 -- ============================================
 
 -- Procedure: sp_apply_coupon
@@ -274,12 +274,12 @@ BEGIN
                 SET status = 'Cancelled'
                 WHERE id = v_booking_id;
                 
-                -- 4. Giải phóng ghế: Bất kỳ status nào → Available
+                -- 4. Giải phóng ghế: Held → Available
                 UPDATE showtime_seat
                 SET status = 'Available',
                     booking_id = NULL
                 WHERE booking_id = v_booking_id
-                  AND status != 'Available';
+                  AND status = 'Held';
                 
                 COMMIT;
                 SET v_success_count = v_success_count + 1;
