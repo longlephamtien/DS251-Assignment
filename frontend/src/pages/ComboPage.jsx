@@ -100,6 +100,7 @@ export default function ComboPage() {
 
       // Update context - booking created in PaymentPage
       updateBookingData({
+        bookingId: null, // Clear old booking ID - new booking will be created in PaymentPage
         selectedCombos,
         fwbItems,
         comboTotal,

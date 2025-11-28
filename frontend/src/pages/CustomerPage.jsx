@@ -1130,45 +1130,80 @@ const BookingHistoryTab = () => {
                           </>
                         )}
                         {booking.status === 'Pending' && (
-                          <button
-                            onClick={async () => {
-                              try {
-                                // Call calculate API to get detailed pricing
-                                const response = await fetch(`${require('../config').default.apiUrl}/payment/calculate/${booking.id}`);
-                                const calculation = await response.json();
+                          <>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  // Call calculate API to get detailed pricing
+                                  const response = await fetch(`${require('../config').default.apiUrl}/payment/calculate/${booking.id}`);
+                                  const calculation = await response.json();
 
-                                navigate(`/payment/${booking.id}`, {
-                                  state: {
-                                    totalPrice: calculation.finalAmount || booking.totalAmount,
-                                    seatTotal: calculation.baseSeatPrice || booking.totalAmount,
-                                    comboTotal: calculation.fwbPrice || 0,
-                                    bookingInfo: {
-                                      movie: { title: booking.movieTitle },
-                                      showtime: booking.showtime
-                                    },
-                                    calculation // Pass full calculation data
-                                  }
-                                });
-                              } catch (error) {
-                                console.error('Failed to calculate:', error);
-                                // Fallback to basic data
-                                navigate(`/payment/${booking.id}`, {
-                                  state: {
-                                    totalPrice: booking.totalAmount,
-                                    seatTotal: booking.totalAmount,
-                                    bookingInfo: {
-                                      movie: { title: booking.movieTitle },
-                                      showtime: booking.showtime
+                                  navigate(`/payment/${booking.id}`, {
+                                    state: {
+                                      totalPrice: calculation.finalAmount || booking.totalAmount,
+                                      seatTotal: calculation.baseSeatPrice || booking.totalAmount,
+                                      comboTotal: calculation.fwbPrice || 0,
+                                      bookingInfo: {
+                                        movie: { title: booking.movieTitle },
+                                        showtime: booking.showtime
+                                      },
+                                      calculation // Pass full calculation data
                                     }
+                                  });
+                                } catch (error) {
+                                  console.error('Failed to calculate:', error);
+                                  // Fallback to basic data
+                                  navigate(`/payment/${booking.id}`, {
+                                    state: {
+                                      totalPrice: booking.totalAmount,
+                                      seatTotal: booking.totalAmount,
+                                      bookingInfo: {
+                                        movie: { title: booking.movieTitle },
+                                        showtime: booking.showtime
+                                      }
+                                    }
+                                  });
+                                }
+                              }}
+                              className="bg-accent hover:bg-accent/90 text-white font-bold py-2 px-8 rounded flex items-center"
+                            >
+                              <Icon name="credit-card" className="mr-2" />
+                              Pay Now
+                            </button>
+
+                            <button
+                              onClick={async () => {
+                                if (window.confirm('Are you sure you want to cancel this booking?')) {
+                                  try {
+                                    const response = await fetch(`${require('../config').default.apiUrl}/payment/cancel`, {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        bookingId: parseInt(booking.id),
+                                        reason: 'User cancelled from My Bookings'
+                                      })
+                                    });
+
+                                    if (!response.ok) {
+                                      const error = await response.json();
+                                      throw new Error(error.message || 'Failed to cancel booking');
+                                    }
+
+                                    alert('Booking cancelled successfully');
+                                    // Refresh bookings
+                                    window.location.reload();
+                                  } catch (error) {
+                                    console.error('Failed to cancel:', error);
+                                    alert(`Failed to cancel booking: ${error.message}`);
                                   }
-                                });
-                              }
-                            }}
-                            className="bg-accent hover:bg-accent/90 text-white font-bold py-2 px-8 rounded flex items-center"
-                          >
-                            <Icon name="credit-card" className="mr-2" />
-                            Pay Now
-                          </button>
+                                }
+                              }}
+                              className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded flex items-center"
+                            >
+                              <Icon name="x" className="mr-2" />
+                              Cancel
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>
@@ -1187,7 +1222,7 @@ const BookingHistoryTab = () => {
             {/* Header with movie poster */}
             <div className="bg-gradient-to-r from-primary to-secondary p-6 text-white">
               <div className="flex items-center gap-4">
-                  <div className="w-16 h-24 bg-white/20 rounded overflow-hidden flex-shrink-0">
+                <div className="w-16 h-24 bg-white/20 rounded overflow-hidden flex-shrink-0">
                   <img
                     src={resolvePoster(ticketModal.booking?.moviePoster) || `https://via.placeholder.com/64x96/FFFFFF/6B46C1?text=Movie`}
                     alt={ticketModal.booking?.movieTitle}

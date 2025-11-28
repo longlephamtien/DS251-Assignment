@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Icon from '../components/common/Icon';
 import Notification from '../components/common/Notification';
 import { useBooking } from '../context/BookingContext';
-import { startBooking, confirmPayment, cancelPayment, generateTransactionId, calculateFinalAmount } from '../api/bookingService';
+import { startBooking, confirmPayment, cancelPayment, generateTransactionId, calculateFinalAmount, getBookingDetails } from '../api/bookingService';
 import { couponService } from '../services';
 import atmLogo from '../assets/media/payment/atm-logo.png';
 import visaMasterLogo from '../assets/media/payment/visa-mastercard-logo.png';
@@ -22,10 +22,19 @@ export default function PaymentPage() {
   console.log('🔍 BookingContext:', bookingData);
 
   // Get booking data from location state (coming from My Bookings) or context (booking flow)
-  // Parse to number because URL params are always strings
-  const [currentBookingId, setCurrentBookingId] = useState(
-    routeBookingId ? parseInt(routeBookingId, 10) : bookingData.bookingId
-  );
+  const [currentBookingId, setCurrentBookingId] = useState(() => {
+    // ONLY use bookingId from URL (from "My Bookings" or "Resume Payment")
+    // This is the ONLY authoritative source
+    if (routeBookingId) {
+      console.log('📍 Using booking ID from URL (My Bookings):', routeBookingId);
+      return parseInt(routeBookingId, 10);
+    }
+
+    // Otherwise: coming from normal booking flow (seat -> combo -> payment)
+    // Always create NEW booking - ignore any old bookingId in context
+    console.log('🆕 Normal booking flow - will create new booking');
+    return null;
+  });
 
   console.log('🎯 Initial currentBookingId:', currentBookingId, typeof currentBookingId);
 
@@ -63,7 +72,7 @@ export default function PaymentPage() {
       // Mark as creating to prevent duplicate calls
       bookingCreatedRef.current = true;
       console.log('🚀 Creating new booking with seats + F&B...');
-      
+
       try {
         const response = await startBooking(
           bookingData.customerId,
@@ -77,6 +86,9 @@ export default function PaymentPage() {
 
         setCurrentBookingId(newBookingId);
         updateBookingData({ bookingId: newBookingId });
+
+        // Update URL to include bookingId so refresh works
+        navigate(`/payment/${newBookingId}`, { replace: true });
       } catch (error) {
         console.error('❌ Failed to create booking:', error);
         // Reset flag on error so user can retry
@@ -123,6 +135,7 @@ export default function PaymentPage() {
   const [selectedPayment, setSelectedPayment] = useState('');
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [countdown, setCountdown] = useState(300); // 5 minutes in seconds
+  const [bookingCreatedAt, setBookingCreatedAt] = useState(null); // Thời gian tạo booking từ DB
   const [expandedSection, setExpandedSection] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [notification, setNotification] = useState({
@@ -159,23 +172,32 @@ export default function PaymentPage() {
     setExpandedSection(expandedSection === sectionId ? null : sectionId);
   };
 
-  // Load price breakdown when component mounts or booking changes
+  // Load booking details (including created_time_at) and price breakdown
   useEffect(() => {
-    const loadPriceBreakdown = async () => {
+    const loadBookingData = async () => {
       if (!currentBookingId) {
-        console.log('⚠️ No booking ID, skipping price breakdown load');
+        console.log('⚠️ No booking ID, skipping data load');
         return;
       }
 
-      console.log('🔄 Loading price breakdown for booking:', currentBookingId);
+      console.log('🔄 Loading booking data for:', currentBookingId);
 
       try {
+        // Load booking details to get created_time_at
+        console.log('📡 Fetching booking details for ID:', currentBookingId);
+        const bookingDetails = await getBookingDetails(currentBookingId);
+        console.log('✅ Booking details loaded:', bookingDetails);
+        console.log('📅 Created at:', bookingDetails.createdAt, typeof bookingDetails.createdAt);
+
+        setBookingCreatedAt(bookingDetails.createdAt);
+
+        // Load price breakdown
         const breakdown = await calculateFinalAmount(currentBookingId);
         console.log('✅ Price breakdown loaded:', breakdown);
         setPriceBreakdown(breakdown);
       } catch (error) {
-        console.error('❌ Failed to load price breakdown:', error);
-        console.error('Error details:', error.response?.data || error.message);
+        console.error('❌ Failed to load booking data:', error);
+        console.error('❌ Error details:', error.message, error.stack);
         // Fallback to basic calculation
         setPriceBreakdown({
           baseSeatPrice: seatTotal || 0,
@@ -190,28 +212,86 @@ export default function PaymentPage() {
       }
     };
 
-    loadPriceBreakdown();
+    loadBookingData();
   }, [currentBookingId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Countdown timer
+  // Countdown timer - Tính dựa trên created_time_at từ database
   useEffect(() => {
+    const TIMEOUT_MINUTES = 5;
+    let expiryTime;
+
+    if (!bookingCreatedAt) {
+      console.log('⏳ No booking created time yet - using default 5 min countdown');
+      // Fallback: start countdown from now if no createdAt yet
+      expiryTime = Date.now() + (TIMEOUT_MINUTES * 60 * 1000);
+    } else {
+      // Parse UTC timestamp from database (already in UTC format)
+      const createdTime = new Date(bookingCreatedAt).getTime();
+      expiryTime = createdTime + (TIMEOUT_MINUTES * 60 * 1000);
+
+      // Get current time in milliseconds
+      const now = Date.now();
+      const ageInSeconds = Math.floor((now - createdTime) / 1000);
+
+      console.log('⏰ Booking created at (UTC):', bookingCreatedAt);
+      console.log('⏰ Booking created at (Local):', new Date(createdTime).toString());
+      console.log('⏰ Will expire at:', new Date(expiryTime).toString());
+      console.log('⏰ Booking age:', ageInSeconds, 'seconds');
+      console.log('⏰ Current time:', new Date(now).toString());
+
+      // Safety check: If booking is already > 5 mins old, it might be stale data
+      if (ageInSeconds >= TIMEOUT_MINUTES * 60) {
+        console.error('⚠️ WARNING: Booking is already expired! Age:', ageInSeconds, 'seconds');
+        console.error('⚠️ This might be stale data or system clock issue');
+        // Don't immediately timeout - let backend handle it
+        return;
+      }
+    }
+
     const timer = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          // Auto-cancel booking when time runs out
-          handleTimeout();
-          return 0;
-        }
-        return prev - 1;
-      });
+      const nowInInterval = Date.now();
+      const remainingMs = expiryTime - nowInInterval;
+      const remainingSec = Math.max(0, Math.floor(remainingMs / 1000));
+
+      setCountdown(remainingSec);
+
+      if (remainingSec <= 0) {
+        clearInterval(timer);
+        handleTimeout();
+      }
     }, 1000);
 
+    // Calculate initial countdown immediately
+    const now = Date.now();
+    const remainingMs = expiryTime - now;
+    const remainingSec = Math.max(0, Math.floor(remainingMs / 1000));
+    setCountdown(remainingSec);
+
     return () => clearInterval(timer);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bookingCreatedAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTimeout = async () => {
-    if (!currentBookingId) return;
+    if (!currentBookingId) {
+      console.log('⚠️ handleTimeout called but no booking ID');
+      return;
+    }
+
+    // Double-check booking age before cancelling
+    if (bookingCreatedAt) {
+      const createdTime = new Date(bookingCreatedAt).getTime();
+      const nowAtTimeout = new Date().getTime();
+      const ageInSeconds = Math.floor((nowAtTimeout - createdTime) / 1000);
+
+      console.log('⏰ handleTimeout - Booking age:', ageInSeconds, 'seconds');
+
+      // Defensive check: only proceed if truly > 5 mins
+      if (ageInSeconds < 300) {
+        console.error('⚠️ FALSE TIMEOUT! Booking is only', ageInSeconds, 'seconds old');
+        return;
+      }
+    }
+
+    console.log('🚨 Timeout confirmed - cancelling booking', currentBookingId);
 
     try {
       await cancelPayment(currentBookingId, 'Payment timeout - 5 minutes exceeded');
@@ -420,7 +500,16 @@ export default function PaymentPage() {
 
       const paymentMethod = paymentMethodMap[selectedPayment] || selectedPayment;
       const transactionId = generateTransactionId();
-      const durationInMinutes = Math.ceil((300 - countdown) / 60); // Calculate how long payment took
+
+      // Calculate how long payment took (ensure minimum 1 minute)
+      const elapsedSeconds = 300 - countdown;
+      const durationInMinutes = Math.max(1, Math.ceil(elapsedSeconds / 60));
+
+      console.log('⏱️ Payment duration:', {
+        countdown,
+        elapsedSeconds,
+        durationInMinutes
+      });
 
       // Call API to confirm payment
       const response = await confirmPayment(
@@ -977,14 +1066,45 @@ export default function PaymentPage() {
           {/* Bottom Navigation Bar */}
           <div className="bg-gray-900 text-white px-8 py-4">
             <div className="flex items-center justify-between">
-              {/* Previous Button */}
-              <button
-                onClick={handlePrevious}
-                className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 px-6 py-3 rounded transition-colors"
-              >
-                <Icon name="chevron-left" className="w-5 h-5" />
-                <span className="font-semibold">PREVIOUS</span>
-              </button>
+              {/* Left Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={handlePrevious}
+                  className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 px-6 py-3 rounded transition-colors"
+                >
+                  <Icon name="chevron-left" className="w-5 h-5" />
+                  <span className="font-semibold">PREVIOUS</span>
+                </button>
+
+                <button
+                  onClick={async () => {
+                    if (window.confirm('Are you sure you want to cancel this booking?')) {
+                      try {
+                        await cancelPayment(currentBookingId, 'User cancelled payment');
+                        setNotification({
+                          isOpen: true,
+                          title: 'Booking Cancelled',
+                          message: 'Your booking has been cancelled successfully.',
+                          type: 'success'
+                        });
+                        setTimeout(() => navigate('/'), 2000);
+                      } catch (error) {
+                        console.error('Failed to cancel:', error);
+                        setNotification({
+                          isOpen: true,
+                          title: 'Error',
+                          message: 'Failed to cancel booking',
+                          type: 'error'
+                        });
+                      }
+                    }
+                  }}
+                  className="flex items-center gap-2 bg-red-600 hover:bg-red-700 px-6 py-3 rounded transition-colors"
+                >
+                  <Icon name="x" className="w-5 h-5" />
+                  <span className="font-semibold">CANCEL PAYMENT</span>
+                </button>
+              </div>
 
               {/* Movie Info */}
               <div className="flex items-center gap-4">

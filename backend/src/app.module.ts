@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
@@ -34,6 +35,8 @@ import { Refund } from './modules/refund/entities/refund.entity';
 
 @Module({
   imports: [
+    // Enable scheduled tasks (cron jobs)
+    ScheduleModule.forRoot(),
     MovieModule,
     TheaterModule,
     ShowtimeModule,
@@ -72,6 +75,7 @@ import { Refund } from './modules/refund/entities/refund.entity';
           synchronize: false,
           charset: 'utf8mb4',
           collation: 'utf8mb4_unicode_ci',
+          timezone: 'Z', // Database is in UTC
           extra: ssl ? { ssl } : {},
         };
       },
