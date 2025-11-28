@@ -30,7 +30,7 @@ export class BookingService {
     try {
       await this.dataSource.query(
         'CALL sp_start_booking(?,?,?,?,@p_booking_id);',
-        [customerId, showtimeId, seatJson, fwbJson],
+        [customerId, showtimeId, seatJson, null],
       );
 
       const [row] = await this.dataSource.query(

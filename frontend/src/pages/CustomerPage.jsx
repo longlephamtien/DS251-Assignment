@@ -1741,7 +1741,7 @@ const CustomerPage = () => {
                     : 'text-gray-600 hover:bg-gray-100'
                     }`}
                 >
-                  <Icon name={tab.icon} className="mr-3 text-lg" />
+                  {/* <Icon name={tab.icon} className="mr-3 text-lg" /> */}
                   <span className="text-sm">{tab.label}</span>
                 </button>
               ))}
