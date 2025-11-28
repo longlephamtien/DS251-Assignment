@@ -93,10 +93,12 @@ class BookingService {
    */
   async getMyBookings() {
     try {
+      const token = localStorage.getItem('accessToken');
       const response = await fetch(`${config.apiUrl}/booking/my-bookings`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
       });
 
