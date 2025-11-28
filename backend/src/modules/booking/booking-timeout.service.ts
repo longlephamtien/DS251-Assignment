@@ -47,11 +47,11 @@ export class BookingTimeoutService {
       // Chỉ log khi có booking bị cancel
       if (cancelledCount > 0 || failedCount > 0) {
         this.logger.warn(
-          `⏰ Timeout cleanup: ${cancelledCount} cancelled, ${failedCount} failed (>${this.TIMEOUT_MINUTES} mins)`
+          `Timeout cleanup: ${cancelledCount} cancelled, ${failedCount} failed (>${this.TIMEOUT_MINUTES} mins)`
         );
       }
     } catch (error) {
-      this.logger.error('❌ Error in cancelExpiredBookings:', error);
+      this.logger.error('Error in cancelExpiredBookings:', error);
     }
   }
 
@@ -64,7 +64,7 @@ export class BookingTimeoutService {
     failed: number;
     message: string;
   }> {
-    this.logger.log('🔧 Manual trigger: cancelExpiredBookings');
+    this.logger.log('Manual trigger: cancelExpiredBookings');
 
     try {
       await this.dataSource.query(
@@ -84,7 +84,7 @@ export class BookingTimeoutService {
         message: `Cleanup completed: ${result.cancelledCount} cancelled, ${result.failedCount} failed`
       };
     } catch (error) {
-      this.logger.error('❌ Manual cleanup failed:', error);
+      this.logger.error('Manual cleanup failed:', error);
       throw error;
     }
   }

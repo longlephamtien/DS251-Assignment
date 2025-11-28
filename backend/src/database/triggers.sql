@@ -1,7 +1,7 @@
 -- ============================================
 -- Triggers
 -- Database: bkinema
--- Generated: 2025-11-28T12:33:26.150Z
+-- Generated: 2025-11-28T15:29:27.264Z
 -- ============================================
 
 -- Trigger: trg_after_user_insert
@@ -27,6 +27,47 @@ CREATE DEFINER="avnadmin"@"%" TRIGGER "trg_before_customer_update" BEFORE UPDATE
     END IF;
     
     SET NEW.membership_name = fn_get_membership_by_points(NEW.accumulated_points);
+END$$
+DELIMITER ;
+
+-- Trigger: trg_customer_membership_bi
+-- Table: customer
+DROP TRIGGER IF EXISTS trg_customer_membership_bi;
+DELIMITER $$
+CREATE DEFINER="avnadmin"@"%" TRIGGER "trg_customer_membership_bi" BEFORE INSERT ON "customer" FOR EACH ROW BEGIN
+    DECLARE v_tier_name VARCHAR(255);
+
+    -- Find highest tier whose min_point <= accumulated_points
+    SELECT m.tier_name
+    INTO v_tier_name
+    FROM membership AS m
+    WHERE m.uk_membership_min_point <= NEW.accumulated_points
+    ORDER BY m.uk_membership_min_point DESC
+    LIMIT 1;
+
+    -- If a tier is found, set it; otherwise leave NULL (FK allows NULL)
+    SET NEW.membership_name = v_tier_name;
+END$$
+DELIMITER ;
+
+-- Trigger: trg_customer_membership_bu
+-- Table: customer
+DROP TRIGGER IF EXISTS trg_customer_membership_bu;
+DELIMITER $$
+CREATE DEFINER="avnadmin"@"%" TRIGGER "trg_customer_membership_bu" BEFORE UPDATE ON "customer" FOR EACH ROW BEGIN
+    DECLARE v_tier_name VARCHAR(255);
+
+    -- Only react when points actually increase
+    IF NEW.accumulated_points > OLD.accumulated_points THEN
+        SELECT m.tier_name
+        INTO v_tier_name
+        FROM membership AS m
+        WHERE m.uk_membership_min_point <= NEW.accumulated_points
+        ORDER BY m.uk_membership_min_point DESC
+        LIMIT 1;
+
+        SET NEW.membership_name = v_tier_name;
+    END IF;
 END$$
 DELIMITER ;
 
@@ -92,6 +133,17 @@ CREATE DEFINER="avnadmin"@"%" TRIGGER "trg_after_seat_update" AFTER UPDATE ON "s
     )
     WHERE number = NEW.au_number 
     AND theater_id = NEW.au_theater_id;
+END$$
+DELIMITER ;
+
+-- Trigger: trg_sendgift_set_isgift
+-- Table: send_gift
+DROP TRIGGER IF EXISTS trg_sendgift_set_isgift;
+DELIMITER $$
+CREATE DEFINER="avnadmin"@"%" TRIGGER "trg_sendgift_set_isgift" AFTER INSERT ON "send_gift" FOR EACH ROW BEGIN
+    UPDATE booking
+    SET is_gift = 1
+    WHERE id = NEW.booking_id;
 END$$
 DELIMITER ;
 
