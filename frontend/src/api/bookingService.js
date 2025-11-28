@@ -222,6 +222,32 @@ export const getBookingById = async (bookingId) => {
     }
 };
 
+/**
+ * Calculate final amount with all discounts (membership + coupon)
+ * @param {number} bookingId - ID of the booking
+ * @returns {Promise<Object>} - Detailed price breakdown
+ */
+export const calculateFinalAmount = async (bookingId) => {
+    try {
+        const response = await fetch(`${config.apiUrl}/payment/calculate/${bookingId}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || 'Failed to calculate final amount');
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error calculating final amount:', error);
+        throw error;
+    }
+};
+
 export default {
     startBooking,
     updateBookingFwb,
@@ -231,4 +257,5 @@ export default {
     generateTransactionId,
     getMyBookings,
     getBookingById,
+    calculateFinalAmount,
 };

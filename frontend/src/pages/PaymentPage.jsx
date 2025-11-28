@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Icon from '../components/common/Icon';
 import Notification from '../components/common/Notification';
 import { useBooking } from '../context/BookingContext';
-import { confirmPayment, cancelPayment, generateTransactionId } from '../api/bookingService';
+import { confirmPayment, cancelPayment, generateTransactionId, calculateFinalAmount } from '../api/bookingService';
 import { couponService } from '../services';
 import atmLogo from '../assets/media/payment/atm-logo.png';
 import visaMasterLogo from '../assets/media/payment/visa-mastercard-logo.png';
@@ -18,8 +18,14 @@ export default function PaymentPage() {
   const location = useLocation();
   const { bookingData } = useBooking();
 
+  console.log('🔍 URL Params:', { date, routeBookingId });
+  console.log('🔍 BookingContext:', bookingData);
+
   // Get booking data from location state (coming from My Bookings) or context (booking flow)
-  const currentBookingId = routeBookingId || bookingData.bookingId;
+  // Parse to number because URL params are always strings
+  const currentBookingId = routeBookingId ? parseInt(routeBookingId, 10) : bookingData.bookingId;
+  
+  console.log('🎯 Final currentBookingId:', currentBookingId, typeof currentBookingId);
 
   // Check if we have required data
   useEffect(() => {
@@ -67,12 +73,58 @@ export default function PaymentPage() {
   const [availableCoupons, setAvailableCoupons] = useState([]);
   const [isLoadingCoupons, setIsLoadingCoupons] = useState(false);
 
+  // Price breakdown from backend
+  const [priceBreakdown, setPriceBreakdown] = useState({
+    baseSeatPrice: 0,
+    fwbPrice: 0,
+    subtotal: 0,
+    couponDiscount: 0,
+    boxOfficeDiscount: 0,
+    concessionDiscount: 0,
+    membershipTier: null,
+    finalAmount: 0
+  });
+
 
   console.log("Booking Data:", bookingData);
 
   const toggleSection = (sectionId) => {
     setExpandedSection(expandedSection === sectionId ? null : sectionId);
   };
+
+  // Load price breakdown when component mounts or booking changes
+  useEffect(() => {
+    const loadPriceBreakdown = async () => {
+      if (!currentBookingId) {
+        console.log('⚠️ No booking ID, skipping price breakdown load');
+        return;
+      }
+      
+      console.log('🔄 Loading price breakdown for booking:', currentBookingId);
+      
+      try {
+        const breakdown = await calculateFinalAmount(currentBookingId);
+        console.log('✅ Price breakdown loaded:', breakdown);
+        setPriceBreakdown(breakdown);
+      } catch (error) {
+        console.error('❌ Failed to load price breakdown:', error);
+        console.error('Error details:', error.response?.data || error.message);
+        // Fallback to basic calculation
+        setPriceBreakdown({
+          baseSeatPrice: seatTotal || 0,
+          fwbPrice: comboTotal || 0,
+          subtotal: totalPrice || 0,
+          couponDiscount: 0,
+          boxOfficeDiscount: 0,
+          concessionDiscount: 0,
+          membershipTier: null,
+          finalAmount: totalPrice || 0
+        });
+      }
+    };
+
+    loadPriceBreakdown();
+  }, [currentBookingId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Countdown timer
   useEffect(() => {
@@ -165,7 +217,16 @@ export default function PaymentPage() {
     setCouponError('');
 
     try {
+      // First validate the coupon
       const couponData = await couponService.validateCoupon(couponCode);
+      
+      // Then apply it to the booking via backend
+      await couponService.applyCoupon(currentBookingId, couponData.couponId);
+      
+      // Reload price breakdown to get updated discount
+      const breakdown = await calculateFinalAmount(currentBookingId);
+      setPriceBreakdown(breakdown);
+      
       setAppliedCoupons([...appliedCoupons, couponData]);
       setCouponCode(''); // Clear input after successful apply
       setCouponError('');
@@ -193,7 +254,7 @@ export default function PaymentPage() {
     setCouponError('');
   };
 
-  const handleSelectCoupon = (coupon) => {
+  const handleSelectCoupon = async (coupon) => {
     // Check if coupon already applied
     if (appliedCoupons.find(c => c.couponId === coupon.couponId)) {
       setNotification({
@@ -205,28 +266,47 @@ export default function PaymentPage() {
       return;
     }
 
-    const couponData = {
-      couponId: parseInt(coupon.couponId),
-      couponCode: coupon.couponCode,
-      couponType: coupon.couponType,
-      discountValue: parseFloat(coupon.balance) || 0,
-      expiryDate: coupon.expiryDate,
-    };
-    
-    setAppliedCoupons([...appliedCoupons, couponData]);
-    setCouponError('');
-    setNotification({
-      isOpen: true,
-      title: 'Success',
-      message: `Coupon ${coupon.couponCode} applied! Discount: ₫${parseFloat(coupon.balance).toLocaleString()}`,
-      type: 'success'
-    });
+    try {
+      // Apply coupon to booking via backend
+      await couponService.applyCoupon(currentBookingId, parseInt(coupon.couponId));
+      
+      // Reload price breakdown to get updated discount
+      const breakdown = await calculateFinalAmount(currentBookingId);
+      console.log('Price breakdown after applying coupon:', breakdown);
+      setPriceBreakdown(breakdown);
+
+      const couponData = {
+        couponId: parseInt(coupon.couponId),
+        couponCode: coupon.couponCode,
+        couponType: coupon.couponType,
+        discountValue: parseFloat(coupon.balance) || 0,
+        expiryDate: coupon.expiryDate,
+      };
+      
+      setAppliedCoupons([...appliedCoupons, couponData]);
+      setCouponError('');
+      setNotification({
+        isOpen: true,
+        title: 'Success',
+        message: `Coupon ${coupon.couponCode} applied! Discount: ₫${parseFloat(coupon.balance).toLocaleString()}`,
+        type: 'success'
+      });
+    } catch (error) {
+      setNotification({
+        isOpen: true,
+        title: 'Error',
+        message: error.message || 'Failed to apply coupon',
+        type: 'error'
+      });
+    }
   };
 
-  // Calculate total discount from all applied coupons
-  const couponDiscount = appliedCoupons.reduce((total, coupon) => total + coupon.discountValue, 0);
-  const discount = pointsToUse + couponDiscount;
-  const finalTotal = Math.max(0, totalPrice - discount);
+  // Calculate total discount from backend data
+  const totalDiscount = (priceBreakdown.boxOfficeDiscount || 0) + 
+                        (priceBreakdown.concessionDiscount || 0) + 
+                        (priceBreakdown.couponDiscount || 0);
+  
+  const finalTotal = priceBreakdown.finalAmount || 0;
 
   const handlePayment = async () => {
     if (!selectedPayment) {
@@ -537,7 +617,7 @@ export default function PaymentPage() {
                           </button>
                         </div>
                         <p className="text-right text-sm">
-                          Discount: <span className="font-bold">₫{discount.toFixed(2)}</span>
+                          Discount: <span className="font-bold">₫{totalDiscount.toFixed(2)}</span>
                         </p>
                       </div>
                     )}
@@ -747,10 +827,10 @@ export default function PaymentPage() {
                     <span className="text-gray-700">Combo</span>
                     <span className="font-semibold text-gray-900">₫{comboTotal.toLocaleString()}</span>
                   </div>
-                  {appliedCoupons.length > 0 && (
+                  {priceBreakdown.couponDiscount > 0 && (
                     <div className="flex justify-between text-sm text-green-600">
-                      <span className="font-semibold">Coupon Discount ({appliedCoupons.length})</span>
-                      <span className="font-semibold">-₫{couponDiscount.toLocaleString()}</span>
+                      <span className="font-semibold">Coupon Discount</span>
+                      <span className="font-semibold">-₫{priceBreakdown.couponDiscount.toLocaleString()}</span>
                     </div>
                   )}
                   <div className="border-t border-gray-300 pt-3 mt-2">
@@ -765,17 +845,38 @@ export default function PaymentPage() {
                   <h3 className="font-bold text-center">Discount</h3>
                 </div>
                 <div className="p-6">
-                  {appliedCoupons.length > 0 && (
+                  {priceBreakdown.membershipTier && (
                     <div className="text-center mb-2">
-                      <p className="text-xs text-gray-600">Coupons Applied: {appliedCoupons.length}</p>
-                      {appliedCoupons.map((coupon, index) => (
-                        <p key={index} className="text-xs text-green-600">
-                          {coupon.couponCode}: -₫{coupon.discountValue.toLocaleString()}
+                      <p className="text-xs font-semibold text-purple-600 mb-1">
+                        {priceBreakdown.membershipTier} Member Benefits
+                      </p>
+                      {priceBreakdown.boxOfficeDiscount > 0 && (
+                        <p className="text-xs text-green-600">
+                          Ticket Discount: -₫{priceBreakdown.boxOfficeDiscount.toLocaleString()}
                         </p>
-                      ))}
+                      )}
+                      {priceBreakdown.concessionDiscount > 0 && (
+                        <p className="text-xs text-green-600">
+                          F&B Discount: -₫{priceBreakdown.concessionDiscount.toLocaleString()}
+                        </p>
+                      )}
                     </div>
                   )}
-                  <p className="font-bold text-gray-900 text-center">₫{discount.toLocaleString()}</p>
+                  {priceBreakdown.couponDiscount > 0 && (
+                    <div className="text-center mb-2">
+                      <p className="text-xs font-semibold text-blue-600 mb-1">Coupon Applied</p>
+                      <p className="text-xs text-green-600">
+                        Coupon Discount: -₫{priceBreakdown.couponDiscount.toLocaleString()}
+                      </p>
+                    </div>
+                  )}
+                  {totalDiscount === 0 && (
+                    <p className="text-xs text-gray-500 text-center mb-2">No discount applied</p>
+                  )}
+                  <p className="font-bold text-gray-900 text-center">₫{totalDiscount.toLocaleString()}</p>
+                  <p className="text-xs text-gray-500 text-center mt-1">
+                    (Box: ₫{priceBreakdown.boxOfficeDiscount || 0} | F&B: ₫{priceBreakdown.concessionDiscount || 0} | Coupon: ₫{priceBreakdown.couponDiscount || 0})
+                  </p>
                 </div>
               </div>
 
@@ -851,9 +952,9 @@ export default function PaymentPage() {
                 <p className="text-sm text-gray-300">Combo Price</p>
                 <p className="font-bold">₫{comboTotal.toLocaleString()}</p>
                 <p className="text-sm text-gray-300">Discount</p>
-                <p className="font-bold text-green-400">₫{discount.toLocaleString()}</p>
-                {appliedCoupons.length > 0 && (
-                  <p className="text-xs text-gray-400">({appliedCoupons.length} Coupon{appliedCoupons.length > 1 ? 's' : ''}: ₫{couponDiscount.toLocaleString()})</p>
+                <p className="font-bold text-green-400">₫{totalDiscount.toLocaleString()}</p>
+                {priceBreakdown.membershipTier && (
+                  <p className="text-xs text-gray-400">({priceBreakdown.membershipTier} Member)</p>
                 )}
                 <p className="text-sm text-gray-300 mt-2">Total</p>
                 <p className="font-bold text-xl text-yellow-400">₫{finalTotal.toLocaleString()}</p>
