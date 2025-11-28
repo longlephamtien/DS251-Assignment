@@ -1,5 +1,14 @@
 import {ApiProperty} from '@nestjs/swagger';
-import { IsArray, ArrayNotEmpty, IsNumber, isNumber } from 'class-validator';
+import { IsArray, ArrayNotEmpty, IsNumber, IsOptional, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+
+class FwbItemDto {
+    @IsNumber()
+    id: number;
+
+    @IsNumber()
+    quantity: number;
+}
 
 export class StartBookingDto {
 
@@ -16,5 +25,16 @@ export class StartBookingDto {
     @ArrayNotEmpty()
     @IsNumber({}, { each: true })
     seatIds: number[];
+
+    @ApiProperty({
+        example: [{id: 1, quantity: 2}, {id: 3, quantity: 1}],
+        description: 'Optional array of F&B items',
+        required: false
+    })
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => FwbItemDto)
+    fwbItems?: FwbItemDto[];
 }
 

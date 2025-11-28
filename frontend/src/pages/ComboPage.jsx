@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Icon from '../components/common/Icon';
 import Notification from '../components/common/Notification';
 import { useBooking } from '../context/BookingContext';
-import { updateBookingFwb } from '../api/bookingService';
+// Removed updateBookingFwb import - F&B handled in PaymentPage now
 import { fwbMenuService } from '../services/fwb_menu.service';
 
 export default function ComboPage() {
@@ -88,37 +88,25 @@ export default function ComboPage() {
   const totalPrice = seatTotal + comboTotal;
 
   const handleNext = async () => {
-    // Check if we have a booking ID
-    if (!bookingData.bookingId) {
-      setNotification({
-        isOpen: true,
-        title: 'Booking Error',
-        message: 'No booking found. Please start from seat selection.',
-        type: 'error'
-      });
-      return;
-    }
-
+    // DON'T check bookingId - we create booking in PaymentPage now
     setIsLoading(true);
 
     try {
-      // Convert selectedCombos object to array format expected by API
-      const items = Object.entries(selectedCombos).map(([id, quantity]) => ({
+      // Convert selectedCombos to array
+      const fwbItems = Object.entries(selectedCombos).map(([id, quantity]) => ({
         id: parseInt(id),
         quantity
       }));
 
-      // Call API to update F&B items (even if empty array)
-      await updateBookingFwb(bookingData.bookingId, items);
-
-      // Update context
+      // Update context - booking created in PaymentPage
       updateBookingData({
         selectedCombos,
+        fwbItems,
         comboTotal,
         totalPrice
       });
 
-      // Navigate to payment page
+      // Navigate to payment
       navigate(`/booking/payment/theater/${theaterId}/showtime/${showtimeId}/date/${date}`, {
         state: {
           selectedSeats,

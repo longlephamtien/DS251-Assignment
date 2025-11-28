@@ -3,24 +3,32 @@
 import config from '../config';
 
 /**
- * Start a new booking (hold seats)
+ * Start a new booking (hold seats and optionally add F&B)
  * @param {number} customerId - ID of the customer
  * @param {number} showtimeId - ID of the showtime
  * @param {number[]} seatIds - Array of seat IDs to book
+ * @param {Array<{id: number, quantity: number}>} fwbItems - Optional array of F&B items
  * @returns {Promise<{bookingId: number}>}
  */
-export const startBooking = async (customerId, showtimeId, seatIds) => {
+export const startBooking = async (customerId, showtimeId, seatIds, fwbItems = null) => {
     try {
+        const body = {
+            customerId,
+            showtimeId,
+            seatIds,
+        };
+
+        // Only include fwbItems if provided and not empty
+        if (fwbItems && fwbItems.length > 0) {
+            body.fwbItems = fwbItems;
+        }
+
         const response = await fetch(`${config.apiUrl}/booking/start`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                customerId,
-                showtimeId,
-                seatIds,
-            }),
+            body: JSON.stringify(body),
         });
 
         if (!response.ok) {

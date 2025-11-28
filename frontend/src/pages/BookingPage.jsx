@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Icon from '../components/common/Icon';
 import Notification from '../components/common/Notification';
 import { useBooking } from '../context/BookingContext';
-import { startBooking } from '../api/bookingService';
+// Removed startBooking import - booking created in PaymentPage now
 import { showtimeService } from '../services/showtime.service';
 import { seatService } from '../services/seat.service';
 import { showtimeSeatService } from '../services/showtime_seat.service';
@@ -423,19 +423,16 @@ export default function BookingPage() {
         throw new Error('Please login to continue booking');
       }
       const user = JSON.parse(userStr);
-      const customerId = parseInt(user.userId); // Convert to number for backend validator
+      const customerId = parseInt(user.userId);
 
-      // Call API to start booking
-      const response = await startBooking(customerId, parseInt(showtimeId), seatIds);
-
-      // Convert bookingId to number (MySQL may return string)
-      const bookingId = parseInt(response.bookingId);
-
-      // Update context with booking ID
+      // DON'T create booking yet - just save to context
+      // Booking will be created in PaymentPage with seats + F&B together
       updateBookingData({
-        bookingId: bookingId,
+        bookingId: null, // No booking yet
         customerId,
+        showtimeId: parseInt(showtimeId),
         selectedSeats,
+        seatIds, // Store mapped IDs for later
         seatTotal: total,
         seatsByType,
         bookingInfo

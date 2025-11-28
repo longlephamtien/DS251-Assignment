@@ -11,22 +11,26 @@ export class BookingService {
    * Gọi sp_start_booking:
    *  - Tạo booking (Pending)
    *  - Tạo các showtime_seat status = 'Held'
+   *  - Thêm F&B items (nếu có)
    */
   async startBooking(dto: StartBookingDto) {
-    const { customerId, showtimeId, seatIds } = dto;
+    const { customerId, showtimeId, seatIds, fwbItems } = dto;
     const seatJson = JSON.stringify(seatIds);
+    const fwbJson = fwbItems && fwbItems.length > 0 ? JSON.stringify(fwbItems) : null;
 
     console.log('=== START BOOKING DEBUG ===');
     console.log('Customer ID:', customerId);
     console.log('Showtime ID:', showtimeId);
     console.log('Seat IDs:', seatIds);
     console.log('Seat JSON:', seatJson);
+    console.log('F&B Items:', fwbItems);
+    console.log('F&B JSON:', fwbJson);
     console.log('===========================');
 
     try {
       await this.dataSource.query(
-        'CALL sp_start_booking(?,?,?,@p_booking_id);',
-        [customerId, showtimeId, seatJson],
+        'CALL sp_start_booking(?,?,?,?,@p_booking_id);',
+        [customerId, showtimeId, seatJson, fwbJson],
       );
 
       const [row] = await this.dataSource.query(
@@ -43,10 +47,8 @@ export class BookingService {
   }
 
   /**
-   * Gọi sp_update_booking_fwb:
-   *  - Xóa F&B cũ
-   *  - Thêm F&B mới
-   *  - Tính tổng tiền F&B
+   * DEPRECATED: F&B now handled in sp_start_booking
+   * Kept for backward compatibility
    */
   async updateBookingFwb(dto: UpdateFwbDto) {
     const { bookingId, items } = dto;

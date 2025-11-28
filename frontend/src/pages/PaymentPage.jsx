@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Icon from '../components/common/Icon';
 import Notification from '../components/common/Notification';
 import { useBooking } from '../context/BookingContext';
-import { confirmPayment, cancelPayment, generateTransactionId, calculateFinalAmount } from '../api/bookingService';
+import { startBooking, confirmPayment, cancelPayment, generateTransactionId, calculateFinalAmount } from '../api/bookingService';
 import { couponService } from '../services';
 import atmLogo from '../assets/media/payment/atm-logo.png';
 import visaMasterLogo from '../assets/media/payment/visa-mastercard-logo.png';
@@ -16,29 +16,96 @@ export default function PaymentPage() {
   const { date, bookingId: routeBookingId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { bookingData } = useBooking();
+  const { bookingData, updateBookingData } = useBooking();
 
   console.log('🔍 URL Params:', { date, routeBookingId });
   console.log('🔍 BookingContext:', bookingData);
 
   // Get booking data from location state (coming from My Bookings) or context (booking flow)
   // Parse to number because URL params are always strings
-  const currentBookingId = routeBookingId ? parseInt(routeBookingId, 10) : bookingData.bookingId;
-  
-  console.log('🎯 Final currentBookingId:', currentBookingId, typeof currentBookingId);
+  const [currentBookingId, setCurrentBookingId] = useState(
+    routeBookingId ? parseInt(routeBookingId, 10) : bookingData.bookingId
+  );
 
-  // Check if we have required data
+  console.log('🎯 Initial currentBookingId:', currentBookingId, typeof currentBookingId);
+
+  // Use ref to prevent double booking creation (persists across re-renders)
+  const bookingCreatedRef = useRef(false);
+
+  // Create booking on mount if coming from booking flow (no bookingId yet)
   useEffect(() => {
-    if (!currentBookingId) {
+    const createBookingIfNeeded = async () => {
+      // Skip if we already have a bookingId (from URL or context)
+      if (currentBookingId) {
+        console.log('✅ Booking already exists:', currentBookingId);
+        return;
+      }
+
+      // Skip if booking already created (prevent double call in StrictMode)
+      if (bookingCreatedRef.current) {
+        console.log('⏳ Booking creation already in progress or completed, skipping...');
+        return;
+      }
+
+      // Skip if no seat/showtime data (invalid state)
+      if (!bookingData.customerId || !bookingData.showtimeId || !bookingData.seatIds) {
+        console.error('❌ Missing booking data:', bookingData);
+        setNotification({
+          isOpen: true,
+          title: 'Error',
+          message: 'Missing booking information. Please start from seat selection.',
+          type: 'error'
+        });
+        setTimeout(() => navigate('/'), 2000);
+        return;
+      }
+
+      // Mark as creating to prevent duplicate calls
+      bookingCreatedRef.current = true;
+      console.log('🚀 Creating new booking with seats + F&B...');
+      
+      try {
+        const response = await startBooking(
+          bookingData.customerId,
+          bookingData.showtimeId,
+          bookingData.seatIds,
+          bookingData.fwbItems || null // F&B items from ComboPage
+        );
+
+        const newBookingId = parseInt(response.bookingId);
+        console.log('✅ Booking created:', newBookingId);
+
+        setCurrentBookingId(newBookingId);
+        updateBookingData({ bookingId: newBookingId });
+      } catch (error) {
+        console.error('❌ Failed to create booking:', error);
+        // Reset flag on error so user can retry
+        bookingCreatedRef.current = false;
+        setNotification({
+          isOpen: true,
+          title: 'Booking Failed',
+          message: error.message || 'Failed to create booking',
+          type: 'error'
+        });
+        setTimeout(() => navigate('/'), 2000);
+      }
+    };
+
+    createBookingIfNeeded();
+  }, []); // Run once on mount
+
+  // Check if we have required data (after booking creation attempt)
+  useEffect(() => {
+    if (!currentBookingId && !bookingData.seatIds) {
       setNotification({
         isOpen: true,
         title: 'Error',
-        message: 'No booking ID found',
+        message: 'No booking data found',
         type: 'error'
       });
       setTimeout(() => navigate('/'), 2000);
     }
-  }, [currentBookingId, navigate]);
+  }, [currentBookingId, bookingData.seatIds, navigate]);
 
   const {
     selectedSeats = bookingData.selectedSeats || [],
@@ -64,7 +131,7 @@ export default function PaymentPage() {
     message: '',
     type: 'info'
   });
-  
+
   // Coupon states - Support multiple coupons
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupons, setAppliedCoupons] = useState([]); // Changed to array
@@ -99,9 +166,9 @@ export default function PaymentPage() {
         console.log('⚠️ No booking ID, skipping price breakdown load');
         return;
       }
-      
+
       console.log('🔄 Loading price breakdown for booking:', currentBookingId);
-      
+
       try {
         const breakdown = await calculateFinalAmount(currentBookingId);
         console.log('✅ Price breakdown loaded:', breakdown);
@@ -219,14 +286,14 @@ export default function PaymentPage() {
     try {
       // First validate the coupon
       const couponData = await couponService.validateCoupon(couponCode);
-      
+
       // Then apply it to the booking via backend
       await couponService.applyCoupon(currentBookingId, couponData.couponId);
-      
+
       // Reload price breakdown to get updated discount
       const breakdown = await calculateFinalAmount(currentBookingId);
       setPriceBreakdown(breakdown);
-      
+
       setAppliedCoupons([...appliedCoupons, couponData]);
       setCouponCode(''); // Clear input after successful apply
       setCouponError('');
@@ -269,7 +336,7 @@ export default function PaymentPage() {
     try {
       // Apply coupon to booking via backend
       await couponService.applyCoupon(currentBookingId, parseInt(coupon.couponId));
-      
+
       // Reload price breakdown to get updated discount
       const breakdown = await calculateFinalAmount(currentBookingId);
       console.log('Price breakdown after applying coupon:', breakdown);
@@ -282,7 +349,7 @@ export default function PaymentPage() {
         discountValue: parseFloat(coupon.balance) || 0,
         expiryDate: coupon.expiryDate,
       };
-      
+
       setAppliedCoupons([...appliedCoupons, couponData]);
       setCouponError('');
       setNotification({
@@ -302,10 +369,10 @@ export default function PaymentPage() {
   };
 
   // Calculate total discount from backend data
-  const totalDiscount = (priceBreakdown.boxOfficeDiscount || 0) + 
-                        (priceBreakdown.concessionDiscount || 0) + 
-                        (priceBreakdown.couponDiscount || 0);
-  
+  const totalDiscount = (priceBreakdown.boxOfficeDiscount || 0) +
+    (priceBreakdown.concessionDiscount || 0) +
+    (priceBreakdown.couponDiscount || 0);
+
   const finalTotal = priceBreakdown.finalAmount || 0;
 
   const handlePayment = async () => {
@@ -514,11 +581,11 @@ export default function PaymentPage() {
                             {isValidatingCoupon ? 'Checking...' : 'Apply'}
                           </button>
                         </div>
-                        
+
                         {couponError && (
                           <p className="text-red-600 text-sm mb-2">{couponError}</p>
                         )}
-                        
+
                         {/* Applied Coupons List */}
                         {appliedCoupons.length > 0 && (
                           <div className="mb-4 space-y-2">
@@ -545,45 +612,45 @@ export default function PaymentPage() {
                         {/* Available Coupons List */}
                         <div className="border-t pt-4">
                           <p className="text-sm font-semibold mb-3">Your Available Coupons</p>
-                            {isLoadingCoupons ? (
-                              <p className="text-sm text-gray-500 text-center py-4">Loading coupons...</p>
-                            ) : availableCoupons.length > 0 ? (
-                              <div className="space-y-2 max-h-60 overflow-y-auto">
-                                {availableCoupons.map((coupon) => (
-                                  <div
-                                    key={coupon.couponId}
-                                    className="border border-gray-200 rounded p-3 hover:border-primary hover:bg-blue-50 cursor-pointer transition-all"
-                                    onClick={() => handleSelectCoupon(coupon)}
-                                  >
-                                    <div className="flex justify-between items-start">
-                                      <div className="flex-1">
-                                        <p className="font-bold text-gray-900">{coupon.couponCode}</p>
-                                        <p className="text-xs text-gray-600 mt-1">
-                                          Type: {coupon.couponType}
+                          {isLoadingCoupons ? (
+                            <p className="text-sm text-gray-500 text-center py-4">Loading coupons...</p>
+                          ) : availableCoupons.length > 0 ? (
+                            <div className="space-y-2 max-h-60 overflow-y-auto">
+                              {availableCoupons.map((coupon) => (
+                                <div
+                                  key={coupon.couponId}
+                                  className="border border-gray-200 rounded p-3 hover:border-primary hover:bg-blue-50 cursor-pointer transition-all"
+                                  onClick={() => handleSelectCoupon(coupon)}
+                                >
+                                  <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                      <p className="font-bold text-gray-900">{coupon.couponCode}</p>
+                                      <p className="text-xs text-gray-600 mt-1">
+                                        Type: {coupon.couponType}
+                                      </p>
+                                      {coupon.expiryDate && (
+                                        <p className="text-xs text-gray-500">
+                                          Expires: {new Date(coupon.expiryDate).toLocaleDateString()}
                                         </p>
-                                        {coupon.expiryDate && (
-                                          <p className="text-xs text-gray-500">
-                                            Expires: {new Date(coupon.expiryDate).toLocaleDateString()}
-                                          </p>
-                                        )}
-                                      </div>
-                                      <div className="text-right">
-                                        <p className="text-lg font-bold text-primary">
-                                          ₫{parseFloat(coupon.balance).toLocaleString()}
-                                        </p>
-                                        <button className="text-xs text-primary hover:underline mt-1">
-                                          Select
-                                        </button>
-                                      </div>
+                                      )}
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="text-lg font-bold text-primary">
+                                        ₫{parseFloat(coupon.balance).toLocaleString()}
+                                      </p>
+                                      <button className="text-xs text-primary hover:underline mt-1">
+                                        Select
+                                      </button>
                                     </div>
                                   </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-gray-500 text-center py-4">
-                                No available coupons. Please login or check your account.
-                              </p>
-                            )}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-500 text-center py-4">
+                              No available coupons. Please login or check your account.
+                            </p>
+                          )}
                         </div>
                       </div>
                     )}
