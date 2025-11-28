@@ -1,7 +1,7 @@
 -- ============================================
 -- Stored Procedures
 -- Database: bkinema
--- Generated: 2025-11-28T11:02:21.605Z
+-- Generated: 2025-11-28T16:54:41.138Z
 -- ============================================
 
 -- Procedure: sp_apply_coupon
@@ -182,6 +182,119 @@ BEGIN
     SET p_box_office_discount   = ROUND(p_box_office_discount, 2);
     SET p_concession_discount   = ROUND(p_concession_discount, 2);
     SET p_final_amount          = ROUND(p_final_amount, 2);
+END$$
+DELIMITER ;
+
+-- Procedure: sp_cancel_expired_bookings
+DROP PROCEDURE IF EXISTS sp_cancel_expired_bookings;
+DELIMITER $$
+CREATE DEFINER="avnadmin"@"%" PROCEDURE "sp_cancel_expired_bookings"(
+    IN p_timeout_minutes INT,
+    OUT p_cancelled_count INT,
+    OUT p_failed_count INT
+)
+BEGIN
+    DECLARE v_done INT DEFAULT FALSE;
+    DECLARE v_booking_id BIGINT;
+    DECLARE v_minutes_elapsed INT;
+    DECLARE v_customer_id BIGINT;
+    DECLARE v_seat_count INT;
+    
+    DECLARE v_success_count INT DEFAULT 0;
+    DECLARE v_fail_count INT DEFAULT 0;
+    
+    -- Cursor để lặp qua các booking expired
+    DECLARE cur_expired_bookings CURSOR FOR
+        SELECT 
+            b.id,
+            b.customer_id,
+            TIMESTAMPDIFF(MINUTE, b.created_time_at, NOW()) AS minutes_elapsed,
+            COUNT(DISTINCT ss.seat_id) AS seat_count
+        FROM booking b
+        LEFT JOIN showtime_seat ss ON b.id = ss.booking_id
+        WHERE b.status = 'Pending'
+          AND TIMESTAMPDIFF(MINUTE, b.created_time_at, NOW()) >= p_timeout_minutes
+        GROUP BY b.id, b.customer_id, b.created_time_at;
+    
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET v_done = TRUE;
+    
+    -- Handler cho lỗi từng booking (không rollback toàn bộ)
+    DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+    BEGIN
+        SET v_fail_count = v_fail_count + 1;
+    END;
+    
+    OPEN cur_expired_bookings;
+    
+    read_loop: LOOP
+        FETCH cur_expired_bookings INTO v_booking_id, v_customer_id, v_minutes_elapsed, v_seat_count;
+        
+        IF v_done THEN
+            LEAVE read_loop;
+        END IF;
+        
+        -- Xử lý từng booking trong transaction riêng
+        BEGIN
+            DECLARE EXIT HANDLER FOR SQLEXCEPTION
+            BEGIN
+                ROLLBACK;
+                SET v_fail_count = v_fail_count + 1;
+            END;
+            
+            START TRANSACTION;
+            
+            -- 1. Kiểm tra lại booking vẫn còn Pending (tránh race condition)
+            IF EXISTS(
+                SELECT 1 FROM booking 
+                WHERE id = v_booking_id AND status = 'Pending'
+                FOR UPDATE
+            ) THEN
+                -- 2. Tạo payment record (Cancelled)
+                INSERT INTO payment (
+                    payment_method,
+                    status,
+                    created_time_at,
+                    transaction_id,
+                    expired_time_at,
+                    duration,
+                    booking_id
+                )
+                VALUES (
+                    'System',
+                    'Cancelled',
+                    NOW(),
+                    CONCAT('AUTO-CANCEL-', v_booking_id, '-', UNIX_TIMESTAMP()),
+                    NOW(),
+                    0,
+                    v_booking_id
+                );
+                
+                -- 3. Update booking status
+                UPDATE booking
+                SET status = 'Cancelled'
+                WHERE id = v_booking_id;
+                
+                -- 4. Giải phóng ghế: Held → Available
+                UPDATE showtime_seat
+                SET status = 'Available',
+                    booking_id = NULL
+                WHERE booking_id = v_booking_id
+                  AND status = 'Held';
+                
+                COMMIT;
+                SET v_success_count = v_success_count + 1;
+            ELSE
+                ROLLBACK;
+            END IF;
+        END;
+        
+    END LOOP;
+    
+    CLOSE cur_expired_bookings;
+    
+    SET p_cancelled_count = v_success_count;
+    SET p_failed_count = v_fail_count;
+    
 END$$
 DELIMITER ;
 
@@ -543,6 +656,213 @@ main_block: BEGIN
     -- Success
     SET p_success = TRUE;
     SET p_message = 'Refund processed and coupon created successfully';
+END$$
+DELIMITER ;
+
+-- Procedure: sp_delete_showtime
+DROP PROCEDURE IF EXISTS sp_delete_showtime;
+DELIMITER $$
+CREATE DEFINER="avnadmin"@"%" PROCEDURE "sp_delete_showtime"(
+    IN p_showtime_id BIGINT,
+    IN p_staff_id BIGINT
+)
+BEGIN
+    DECLARE v_showtime_exists INT;
+    DECLARE v_ticket_count INT;
+    DECLARE v_staff_role VARCHAR(255);
+
+    -- Check if staff exists and get role
+    SELECT `role` INTO v_staff_role
+    FROM staff
+    WHERE user_id = p_staff_id;
+
+    IF v_staff_role IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Staff not found or unauthorized';
+    END IF;
+
+    IF v_staff_role NOT IN ('Admin', 'Manager') THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Only Admin or Manager staff can delete showtime';
+    END IF;
+
+    SELECT COUNT(*) INTO v_showtime_exists
+    FROM showtime
+    WHERE id = p_showtime_id;
+
+    IF v_showtime_exists = 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Showtime not found';
+    END IF;
+
+    SELECT COUNT(*) INTO v_ticket_count
+    FROM showtime_seat
+    WHERE st_id = p_showtime_id
+      AND booking_id IS NOT NULL;
+
+    IF v_ticket_count > 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Cannot delete showtime: There are tickets already booked';
+    END IF;
+
+    DELETE FROM showtime_seat WHERE st_id = p_showtime_id;
+    DELETE FROM showtime WHERE id = p_showtime_id;
+
+END$$
+DELIMITER ;
+
+-- Procedure: sp_generate_sales_report
+DROP PROCEDURE IF EXISTS sp_generate_sales_report;
+DELIMITER $$
+CREATE DEFINER="avnadmin"@"%" PROCEDURE "sp_generate_sales_report"(
+    IN p_theater_id BIGINT,
+    IN p_start_date DATE,
+    IN p_end_date DATE
+)
+BEGIN
+    -- Variable declarations
+    DECLARE v_showtime_id BIGINT;
+    DECLARE v_movie_name VARCHAR(255);
+    DECLARE v_showtime_date DATE;
+    DECLARE v_tickets_sold INT;
+    DECLARE v_ticket_revenue DECIMAL(10,2);
+    DECLARE v_fwb_revenue DECIMAL(10,2);
+    DECLARE v_total_revenue DECIMAL(10,2);
+    DECLARE v_theater_exists INT;
+    DECLARE done INT DEFAULT FALSE;
+    
+    -- Cursor to iterate through showtimes
+    DECLARE showtime_cursor CURSOR FOR
+        SELECT 
+            s.id,
+            m.name,
+            s.date
+        FROM showtime s
+        JOIN movie m ON s.movie_id = m.id
+        WHERE s.au_theater_id = p_theater_id
+          AND s.date BETWEEN p_start_date AND p_end_date
+        ORDER BY s.date, s.start_time;
+    
+    -- Handler for cursor end
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+    
+    -- ===================================================================
+    -- PARAMETER VALIDATION
+    -- ===================================================================
+    
+    -- Check if theater_id is provided
+    IF p_theater_id IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Theater ID is required';
+    END IF;
+    
+    -- Check if start_date is provided
+    IF p_start_date IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Start date is required';
+    END IF;
+    
+    -- Check if end_date is provided
+    IF p_end_date IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'End date is required';
+    END IF;
+    
+    -- Check if date range is valid
+    IF p_start_date > p_end_date THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Start date must be before or equal to end date';
+    END IF;
+    
+    -- Check if theater exists
+    SELECT COUNT(*) INTO v_theater_exists
+    FROM theater
+    WHERE id = p_theater_id;
+    
+    IF v_theater_exists = 0 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Theater not found';
+    END IF;
+    
+    -- ===================================================================
+    -- CREATE TEMPORARY TABLE FOR RESULTS (WITH PRIMARY KEY)
+    -- ===================================================================
+    
+    DROP TEMPORARY TABLE IF EXISTS temp_sales_report;
+    CREATE TEMPORARY TABLE temp_sales_report (
+        showtime_id BIGINT PRIMARY KEY,
+        movie_name VARCHAR(255),
+        showtime_date DATE,
+        tickets_sold INT,
+        ticket_revenue DECIMAL(10,2),
+        fwb_revenue DECIMAL(10,2),
+        total_revenue DECIMAL(10,2)
+    );
+    
+    -- ===================================================================
+    -- CURSOR PROCESSING
+    -- ===================================================================
+    
+    OPEN showtime_cursor;
+    
+    read_loop: LOOP
+        FETCH showtime_cursor INTO v_showtime_id, v_movie_name, v_showtime_date;
+        
+        IF done THEN
+            LEAVE read_loop;
+        END IF;
+        
+        -- Calculate tickets sold for this showtime
+        SELECT COUNT(*)
+        INTO v_tickets_sold
+        FROM showtime_seat
+        WHERE st_id = v_showtime_id
+          AND booking_id IS NOT NULL;
+        
+        -- Calculate ticket revenue
+        SELECT COALESCE(SUM(price), 0)
+        INTO v_ticket_revenue
+        FROM showtime_seat
+        WHERE st_id = v_showtime_id
+          AND booking_id IS NOT NULL;
+        
+        -- Calculate F&B revenue (via bookings linked to this showtime)
+        -- FIX: Added f.quantity multiplication
+        SELECT COALESCE(SUM(f.price * f.quantity), 0)
+        INTO v_fwb_revenue
+        FROM fwb f
+        JOIN booking b ON f.booking_id = b.id
+        JOIN showtime_seat ss ON ss.booking_id = b.id
+        WHERE ss.st_id = v_showtime_id
+        GROUP BY ss.st_id;
+        
+        -- Calculate total revenue
+        SET v_total_revenue = v_ticket_revenue + COALESCE(v_fwb_revenue, 0);
+        
+        -- Insert into temp table
+        INSERT INTO temp_sales_report
+        VALUES (
+            v_showtime_id,
+            v_movie_name,
+            v_showtime_date,
+            v_tickets_sold,
+            v_ticket_revenue,
+            COALESCE(v_fwb_revenue, 0),
+            v_total_revenue
+        );
+        
+    END LOOP;
+    
+    CLOSE showtime_cursor;
+    
+    -- ===================================================================
+    -- RETURN RESULTS
+    -- ===================================================================
+    
+    SELECT * FROM temp_sales_report ORDER BY showtime_date, movie_name;
+    
+    DROP TEMPORARY TABLE IF EXISTS temp_sales_report;
+
 END$$
 DELIMITER ;
 
@@ -2055,217 +2375,4 @@ BEGIN
     END IF;
 END$$
 DELIMITER ;
-
-CREATE DEFINER="avnadmin"@"%" PROCEDURE "sp_delete_showtime"(
-    IN p_showtime_id BIGINT,
-    IN p_staff_id BIGINT
-)
-BEGIN
-    DECLARE v_showtime_exists INT;
-    DECLARE v_ticket_count INT;
-    DECLARE v_staff_role VARCHAR(255);
-
-    -- Check if staff exists and get role
-    SELECT role INTO v_staff_role
-    FROM staff
-    WHERE user_id = p_staff_id;
-
-    -- Validate staff authorization
-    IF v_staff_role IS NULL THEN
-        SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Staff not found or unauthorized';
-    END IF;
-
-    -- Only Admin or Manager can delete showtime
-    IF v_staff_role NOT IN ('Admin', 'Manager') THEN
-        SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Only Admin or Manager staff can delete showtime';
-    END IF;
-
-    -- Check if showtime exists
-    SELECT COUNT(*)
-    INTO v_showtime_exists
-    FROM showtime
-    WHERE id = p_showtime_id;
-
-    IF v_showtime_exists = 0 THEN
-        SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Showtime not found';
-    END IF;
-
-    -- Check if there are any tickets booked for this showtime
-    SELECT COUNT(*)
-    INTO v_ticket_count
-    FROM showtime_seat
-    WHERE st_id = p_showtime_id
-      AND booking_id IS NOT NULL;
-
-    -- Only allow deletion if NO tickets have been booked
-    IF v_ticket_count > 0 THEN
-        SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Cannot delete showtime: There are tickets already booked. Please cancel or refund all bookings first.';
-    END IF;
-
-    -- All validations passed, proceed with deletion
-    -- First delete all showtime_seat records
-    DELETE FROM showtime_seat
-    WHERE st_id = p_showtime_id;
-
-    -- Then delete the showtime itself
-    DELETE FROM showtime
-    WHERE id = p_showtime_id;
-
-END;
-
--- Procedure: sp_generate_sales_report
--- This procedure uses CURSOR to iterate through showtimes and calculate sales
-CREATE DEFINER="avnadmin"@"%" PROCEDURE "sp_generate_sales_report"(
-    IN p_theater_id BIGINT,
-    IN p_start_date DATE,
-    IN p_end_date DATE
-)
-BEGIN
-    -- Variable declarations
-    DECLARE v_showtime_id BIGINT;
-    DECLARE v_movie_name VARCHAR(255);
-    DECLARE v_showtime_date DATE;
-    DECLARE v_tickets_sold INT;
-    DECLARE v_ticket_revenue DECIMAL(10,2);
-    DECLARE v_fwb_revenue DECIMAL(10,2);
-    DECLARE v_total_revenue DECIMAL(10,2);
-    DECLARE v_theater_exists INT;
-    DECLARE done INT DEFAULT FALSE;
-    
-    -- Cursor to iterate through showtimes
-    DECLARE showtime_cursor CURSOR FOR
-        SELECT 
-            s.id,
-            m.name,
-            s.date
-        FROM showtime s
-        JOIN movie m ON s.movie_id = m.id
-        WHERE s.au_theater_id = p_theater_id
-          AND s.date BETWEEN p_start_date AND p_end_date
-        ORDER BY s.date, s.start_time;
-    
-    -- Handler for cursor end
-    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
-    
-    -- ===================================================================
-    -- PARAMETER VALIDATION
-    -- ===================================================================
-    
-    -- Check if theater_id is provided
-    IF p_theater_id IS NULL THEN
-        SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Theater ID is required';
-    END IF;
-    
-    -- Check if start_date is provided
-    IF p_start_date IS NULL THEN
-        SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Start date is required';
-    END IF;
-    
-    -- Check if end_date is provided
-    IF p_end_date IS NULL THEN
-        SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'End date is required';
-    END IF;
-    
-    -- Check if date range is valid
-    IF p_start_date > p_end_date THEN
-        SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Start date must be before or equal to end date';
-    END IF;
-    
-    -- Check if theater exists
-    SELECT COUNT(*) INTO v_theater_exists
-    FROM theater
-    WHERE id = p_theater_id;
-    
-    IF v_theater_exists = 0 THEN
-        SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Theater not found';
-    END IF;
-    
-    -- ===================================================================
-    -- CREATE TEMPORARY TABLE FOR RESULTS
-    -- ===================================================================
-    
-    DROP TEMPORARY TABLE IF EXISTS temp_sales_report;
-    CREATE TEMPORARY TABLE temp_sales_report (
-        showtime_id BIGINT PRIMARY KEY,
-        movie_name VARCHAR(255),
-        showtime_date DATE,
-        tickets_sold INT,
-        ticket_revenue DECIMAL(10,2),
-        fwb_revenue DECIMAL(10,2),
-        total_revenue DECIMAL(10,2)
-    );
-    
-    -- ===================================================================
-    -- CURSOR PROCESSING
-    -- ===================================================================
-    
-    OPEN showtime_cursor;
-    
-    read_loop: LOOP
-        FETCH showtime_cursor INTO v_showtime_id, v_movie_name, v_showtime_date;
-        
-        IF done THEN
-            LEAVE read_loop;
-        END IF;
-        
-        -- Calculate tickets sold for this showtime
-        SELECT COUNT(*)
-        INTO v_tickets_sold
-        FROM showtime_seat
-        WHERE st_id = v_showtime_id
-          AND booking_id IS NOT NULL;
-        
-        -- Calculate ticket revenue
-        SELECT COALESCE(SUM(price), 0)
-        INTO v_ticket_revenue
-        FROM showtime_seat
-        WHERE st_id = v_showtime_id
-          AND booking_id IS NOT NULL;
-        
-        -- Calculate F&B revenue (via bookings linked to this showtime)
-        SELECT COALESCE(SUM(f.price), 0)
-        INTO v_fwb_revenue
-        FROM fwb f
-        JOIN booking b ON f.booking_id = b.id
-        JOIN showtime_seat ss ON ss.booking_id = b.id
-        WHERE ss.st_id = v_showtime_id
-        GROUP BY ss.st_id;
-        
-        -- Calculate total revenue
-        SET v_total_revenue = v_ticket_revenue + COALESCE(v_fwb_revenue, 0);
-        
-        -- Insert into temp table
-        INSERT INTO temp_sales_report
-        VALUES (
-            v_showtime_id,
-            v_movie_name,
-            v_showtime_date,
-            v_tickets_sold,
-            v_ticket_revenue,
-            COALESCE(v_fwb_revenue, 0),
-            v_total_revenue
-        );
-        
-    END LOOP;
-    
-    CLOSE showtime_cursor;
-    
-    -- ===================================================================
-    -- RETURN RESULTS
-    -- ===================================================================
-    
-    SELECT * FROM temp_sales_report ORDER BY showtime_date, movie_name;
-    
-    DROP TEMPORARY TABLE IF EXISTS temp_sales_report;
-
-END;
 

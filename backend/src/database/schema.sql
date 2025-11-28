@@ -1,7 +1,7 @@
 -- ============================================
 -- Database Schema (Table Structures)
 -- Database: bkinema
--- Generated: 2025-11-28T11:02:20.305Z
+-- Generated: 2025-11-28T16:54:39.978Z
 -- ============================================
 -- This file contains CREATE TABLE statements for all tables
 -- ============================================
@@ -45,14 +45,13 @@ DROP TABLE IF EXISTS auditorium;
 CREATE TABLE "auditorium" (
   "number" int NOT NULL,
   "theater_id" bigint NOT NULL,
-  "type" varchar(255) NOT NULL DEFAULT 'Normal',
-  "capacity" int NOT NULL,
+  "type" enum('2D','ScreenX','IMAX','4DX') NOT NULL DEFAULT '2D',
+  "capacity" int NOT NULL DEFAULT '0',
   "image" varchar(255) DEFAULT NULL,
   "description" text,
   PRIMARY KEY ("number","theater_id"),
   KEY "fk_auditorium_theater" ("theater_id"),
-  CONSTRAINT "fk_auditorium_theater" FOREIGN KEY ("theater_id") REFERENCES "theater" ("id"),
-  CONSTRAINT "auditorium_chk_1" CHECK ((`capacity` > 0))
+  CONSTRAINT "fk_auditorium_theater" FOREIGN KEY ("theater_id") REFERENCES "theater" ("id")
 );
 
 -- Table: booking
