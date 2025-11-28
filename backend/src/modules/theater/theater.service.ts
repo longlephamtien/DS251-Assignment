@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { TheaterResponseDto } from './theater.dto';
 import { Theater } from './theater.entity';
 
@@ -11,6 +11,7 @@ export class TheaterService {
     constructor(
         @InjectRepository(Theater)
         private theaterRepository: Repository<Theater>,
+        private dataSource: DataSource,
     ) { }
 
     /**
@@ -142,6 +143,36 @@ export class TheaterService {
         } catch (error) {
             this.logger.error('Error fetching schedule:', error);
             throw error;
+        }
+    }
+
+    /**
+     * Generate sales report for a theater
+     */
+    async getSalesReport(theaterId: number, startDate: string, endDate: string): Promise<any[]> {
+        try {
+            this.logger.log(`Generating sales report for theater ${theaterId} from ${startDate} to ${endDate}`);
+
+            const result = await this.dataSource.query(
+                'CALL sp_generate_sales_report(?, ?, ?)',
+                [theaterId, startDate, endDate],
+            );
+
+            let report: any[] = [];
+            if (Array.isArray(result) && Array.isArray(result[0])) {
+                report = result[0];
+            } else if (Array.isArray(result)) {
+                report = result;
+            }
+
+            // Filter out OkPacket
+            report = report.filter(item => item && typeof item === 'object' && !('fieldCount' in item));
+
+            this.logger.log(`Generated sales report with ${report.length} records`);
+            return report;
+        } catch (error) {
+            this.logger.error(`Error generating sales report: ${error.message}`);
+            throw new BadRequestException(error.message || 'Failed to generate sales report');
         }
     }
 }
