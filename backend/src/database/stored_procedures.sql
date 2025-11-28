@@ -1,7 +1,7 @@
 -- ============================================
 -- Stored Procedures
 -- Database: bkinema
--- Generated: 2025-11-28T11:02:21.605Z
+-- Generated: 2025-11-28T12:33:24.399Z
 -- ============================================
 
 -- Procedure: sp_apply_coupon
@@ -543,6 +543,58 @@ main_block: BEGIN
     -- Success
     SET p_success = TRUE;
     SET p_message = 'Refund processed and coupon created successfully';
+END$$
+DELIMITER ;
+
+-- Procedure: sp_delete_showtime
+DROP PROCEDURE IF EXISTS sp_delete_showtime;
+DELIMITER $$
+CREATE DEFINER="avnadmin"@"%" PROCEDURE "sp_delete_showtime"(
+    IN p_showtime_id BIGINT,
+    IN p_staff_id BIGINT
+)
+BEGIN
+    DECLARE v_showtime_exists INT;
+    DECLARE v_ticket_count INT;
+    DECLARE v_staff_role VARCHAR(255);
+
+    -- Check if staff exists and get role
+    SELECT `role` INTO v_staff_role
+    FROM staff
+    WHERE user_id = p_staff_id;
+
+    IF v_staff_role IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Staff not found or unauthorized';
+    END IF;
+
+    IF v_staff_role NOT IN ('Admin', 'Manager') THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Only Admin or Manager staff can delete showtime';
+    END IF;
+
+    SELECT COUNT(*) INTO v_showtime_exists
+    FROM showtime
+    WHERE id = p_showtime_id;
+
+    IF v_showtime_exists = 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Showtime not found';
+    END IF;
+
+    SELECT COUNT(*) INTO v_ticket_count
+    FROM showtime_seat
+    WHERE st_id = p_showtime_id
+      AND booking_id IS NOT NULL;
+
+    IF v_ticket_count > 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Cannot delete showtime: There are tickets already booked';
+    END IF;
+
+    DELETE FROM showtime_seat WHERE st_id = p_showtime_id;
+    DELETE FROM showtime WHERE id = p_showtime_id;
+
 END$$
 DELIMITER ;
 
