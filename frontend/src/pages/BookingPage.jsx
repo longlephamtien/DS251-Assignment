@@ -206,22 +206,7 @@ export default function BookingPage() {
   };
 
   // Use API seats if available, otherwise use dummy data
-  const seatRows = apiSeats.length > 0 ? transformSeatsToRows(apiSeats) : [
-    { row: 'A', seats: ['A10', 'A9', 'A8', 'A7', 'A6', 'A5', 'A4', 'A3', 'A2', 'A1'], type: 'standard' },
-    { row: 'B', seats: ['B12', 'B11', 'B10', 'B9', 'B8', 'B7', 'B6', 'B5', 'B4', 'B3', 'B2', 'B1'], type: 'standard' },
-    { row: 'C', seats: ['C12', 'C11', 'C10', 'C9', 'C8', 'C7', 'C6', 'C5', 'C4', 'C3', 'C2', 'C1'], type: 'standard' },
-    { row: 'D', seats: ['D12', 'D11', 'D10', 'D9', 'D8', 'D7', 'D6', 'D5', 'D4', 'D3', 'D2', 'D1'], type: 'standard' },
-    { row: 'E', seats: ['E12', 'E11', 'E10', 'E9', 'E8', 'E7', 'E6', 'E5', 'E4', 'E3', 'E2', 'E1'], type: 'standard' },
-    { row: 'F', seats: ['F12', 'F11', 'F10', 'F9', 'F8', 'F7', 'F6', 'F5', 'F4', 'F3', 'F2', 'F1'], type: 'standard' },
-    { row: 'G', seats: ['G12', 'G11', 'G10', 'G9', 'G8', 'G7', 'G6', 'G5', 'G4', 'G3', 'G2', 'G1'], type: 'standard' },
-    { row: 'H', seats: ['H12', 'H11', 'H10', 'H9', 'H8', 'H7', 'H6', 'H5', 'H4', 'H3', 'H2', 'H1'], type: 'standard' },
-    { row: 'I', seats: ['I11', 'I10', 'I9', 'I8', 'I7', 'I6', 'I5', 'I4', 'I3', 'I2', 'I1'], type: 'standard' },
-    { row: 'J', seats: ['J11', 'J10', 'J9', 'J8', 'J7', 'J6', 'J5', 'J4', 'J3', 'J2', 'J1'], type: 'standard' },
-    { row: 'K', seats: ['K11', 'K10', 'K9', 'K8', 'K7', 'K6', 'K5', 'K4', 'K3', 'K2', 'K1'], type: 'vip' },
-    { row: 'L', seats: ['L6', 'L5', 'L4', 'L3', 'L2', 'L1'], type: 'vip' },
-    { row: 'M', seats: ['M10', 'M9', 'M8', 'M7', 'M6', 'M5', 'M4', 'M3', 'M2', 'M1'], type: 'sweetbox' }
-  ];
-
+  const seatRows = transformSeatsToRows(apiSeats);
   // Build dynamic seat prices from API data
   const SEAT_PRICES = apiSeats.length > 0
     ? apiSeats.reduce((acc, seat) => {

@@ -56,10 +56,10 @@ const MembershipCard = ({ cardData }) => {
                     <p className="text-sm opacity-90 mb-1">Card Number</p>
                     <p className="font-mono font-bold text-base">{formatCardNumber(cardNumber)}</p>
                 </div>
-                <div>
+                {/* <div>
                     <p className="text-sm opacity-90 mb-1">Valid Until</p>
                     <p className="font-bold">{expiryDate || 'N/A'}</p>
-                </div>
+                </div> */}
             </div>
 
             <div className="border-t border-white border-opacity-30 pt-4">

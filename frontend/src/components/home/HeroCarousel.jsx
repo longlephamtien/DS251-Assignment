@@ -81,13 +81,13 @@ export default function HeroCarousel() {
                     </div>
 
                     {/* Decorative elements */}
-                    <div className="absolute bottom-0 left-0 right-0">
+                    {/* <div className="absolute bottom-0 left-0 right-0">
                       <div className="flex justify-center gap-2 pb-4">
                         <span className="text-4xl">🎄</span>
                         <span className="text-4xl">⛄</span>
                         <span className="text-4xl">🎅</span>
                       </div>
-                    </div>
+                    </div> */}
                   </div>
                 </a>
               </div>

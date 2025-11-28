@@ -6,6 +6,26 @@ import MembershipCard from '../components/MembershipCard';
 import { getMyBookings } from '../api/bookingService';
 import { authService, membershipService, dashboardService, couponService, transactionService, pointService, giftService, refundService } from '../services';
 
+// Resolve poster path for either local asset filename or remote URL
+function resolvePoster(ref) {
+  if (!ref) return null;
+  if (typeof ref !== 'string') return null;
+
+  // If it's already a URL or an absolute path, use it directly
+  if (ref.startsWith('http') || ref.startsWith('//') || ref.startsWith('/')) {
+    return ref;
+  }
+
+  // Otherwise try to load from local assets (webpack require)
+  try {
+    const mod = require(`../assets/media/movies/${ref}`);
+    return (mod && mod.default) ? mod.default : mod;
+  } catch (err) {
+    console.warn('Local poster not found:', ref);
+    return null;
+  }
+}
+
 // Tab Components
 const DashboardTab = () => {
   const [stats, setStats] = useState(null);
@@ -1013,15 +1033,9 @@ const BookingHistoryTab = () => {
       ) : (
         <div className="space-y-4">
           {bookings.map((booking, index) => {
-            // Build poster URL from filename - use require for webpack
-            let posterUrl;
-            try {
-              posterUrl = booking.moviePoster
-                ? require(`../assets/media/movies/${booking.moviePoster}`).default || require(`../assets/media/movies/${booking.moviePoster}`)
-                : null;
-            } catch (e) {
-              posterUrl = null;
-            }
+            // Resolve poster (local filename or remote URL)
+            let posterUrl = resolvePoster(booking.moviePoster);
+            console.log(booking);
 
             // Fallback to placeholder
             if (!posterUrl) {
@@ -1093,7 +1107,7 @@ const BookingHistoryTab = () => {
 
                     <div className="flex items-center justify-between pt-4 border-t border-gray-200">
                       <div className="text-sm text-text-sub">
-                        <Icon name="clock" className="inline mr-1" />
+                        {/* <Icon name="clock" className="inline mr-1" /> */}
                         Booked: {booking.createdAt}
                       </div>
                       <div className="flex gap-2">
@@ -1173,9 +1187,9 @@ const BookingHistoryTab = () => {
             {/* Header with movie poster */}
             <div className="bg-gradient-to-r from-primary to-secondary p-6 text-white">
               <div className="flex items-center gap-4">
-                <div className="w-16 h-24 bg-white/20 rounded overflow-hidden flex-shrink-0">
+                  <div className="w-16 h-24 bg-white/20 rounded overflow-hidden flex-shrink-0">
                   <img
-                    src={ticketModal.booking?.moviePoster || `https://via.placeholder.com/64x96/FFFFFF/6B46C1?text=Movie`}
+                    src={resolvePoster(ticketModal.booking?.moviePoster) || `https://via.placeholder.com/64x96/FFFFFF/6B46C1?text=Movie`}
                     alt={ticketModal.booking?.movieTitle}
                     className="w-full h-full object-cover"
                   />
