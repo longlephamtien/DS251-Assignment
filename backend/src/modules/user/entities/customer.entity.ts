@@ -1,6 +1,9 @@
-import { Entity, Column, PrimaryColumn, OneToOne, JoinColumn, ManyToOne } from 'typeorm';
+import { Entity, Column, PrimaryColumn, OneToOne, JoinColumn, ManyToOne,OneToMany } from 'typeorm';
 import { User } from './user.entity';
 import { Membership } from '../../membership/entities/membership.entity';
+import { Coupon } from '../../coupon/entities/coupon.entity';
+
+
 
 @Entity('customer')
 export class Customer {
@@ -20,4 +23,9 @@ export class Customer {
   @ManyToOne(() => Membership)
   @JoinColumn({ name: 'membership_name', referencedColumnName: 'tierName' })
   membership: Membership;
+
+  @OneToMany(() => Coupon, (coupon) => coupon.customer)
+coupons: Coupon[];
+
+
 }

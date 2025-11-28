@@ -12,10 +12,15 @@ export const useBooking = () => {
 
 export const BookingProvider = ({ children }) => {
   const [bookingData, setBookingData] = useState({
+    bookingId: null,
+    customerId: null,
+    showtimeId: null,
     selectedSeats: [],
+    seatIds: [], // Mapped seat IDs for API
     seatTotal: 0,
     seatsByType: {},
     selectedCombos: {},
+    fwbItems: [], // F&B items for API
     comboTotal: 0,
     bookingInfo: null,
     totalPrice: 0
@@ -27,10 +32,15 @@ export const BookingProvider = ({ children }) => {
 
   const clearBookingData = () => {
     setBookingData({
+      bookingId: null,
+      customerId: null,
+      showtimeId: null,
       selectedSeats: [],
+      seatIds: [],
       seatTotal: 0,
       seatsByType: {},
       selectedCombos: {},
+      fwbItems: [],
       comboTotal: 0,
       bookingInfo: null,
       totalPrice: 0

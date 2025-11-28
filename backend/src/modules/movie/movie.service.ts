@@ -118,4 +118,62 @@ export class MovieService {
             throw error;
         }
     }
+
+    /**
+     * Get a single movie by ID
+     */
+    async getMovieById(id: number): Promise<MovieResponseDto | null> {
+        try {
+
+            const result = await this.dataSource.query(
+                'CALL sp_get_movie_by_id(?)',
+                [id],
+            );
+
+
+            // TypeORM stored procedure results can be in different formats
+            // Try result[0] first (array of results), then result[0][0] (nested array)
+            let movies = result[0] || [];
+
+            // If result[0] is an array with a single nested array, unwrap it
+            if (Array.isArray(movies) && movies.length === 1 && Array.isArray(movies[0])) {
+                movies = movies[0];
+            }
+
+
+            if (movies.length === 0) {
+                this.logger.warn(`No movie found with id=${id}`);
+                return null;
+            }
+
+            const movie = movies[0];
+
+            // Normalize the response - sp_get_movie_by_id returns basic fields only
+            const normalizedMovie: MovieResponseDto = {
+                id: movie.id,
+                name: movie.name,
+                duration: movie.duration,
+                language: movie.language,
+                releaseDate: this.formatDate(movie.release_date) || '',
+                endDate: this.formatDate(movie.end_date),
+                ageRating: movie.age_rating,
+                posterUrl: movie.poster_url,
+                posterFile: movie.poster_file,
+                slug: movie.url_slug || this.generateSlug(movie.name),
+                description: movie.description,
+                trailerUrl: movie.trailer_url,
+                // These fields might not be in sp_get_movie_by_id, set to empty arrays
+                director: [],
+                cast: [],
+                genre: [],
+                subtitle: [],
+                dubbing: [],
+            };
+
+            return normalizedMovie;
+        } catch (error) {
+            this.logger.error(`Error fetching movie with id ${id}:`, error);
+            throw error;
+        }
+    }
 }

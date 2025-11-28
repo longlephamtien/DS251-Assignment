@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Icon from '../components/common/Icon';
 import { movieService } from '../services/movie.service';
+import { theaterService } from '../services/theater.service';
 
 export default function MovieDetailPage() {
   const { slug } = useParams();
@@ -48,22 +49,22 @@ export default function MovieDetailPage() {
 
   const formatLanguageDisplay = (language, subtitles, dubbing) => {
     const parts = [];
-    
+
     // Add language
     if (language) {
       parts.push(language);
     }
-    
+
     // Add subtitle info
     if (subtitles && subtitles.length > 0) {
       parts.push(`Subtitle: ${subtitles.join(', ')}`);
     }
-    
+
     // Add dubbing info
     if (dubbing && dubbing.length > 0) {
       parts.push(`Dubbing: ${dubbing.join(', ')}`);
     }
-    
+
     return parts.length > 0 ? parts.join(' – ') : 'TBA';
   };
 
@@ -122,84 +123,6 @@ export default function MovieDetailPage() {
   };
 
   const dates = generateDates();
-
-  // Sample theater and showtime data
-  const theaterShowtimes = [
-    {
-      id: 1,
-      theater: 'BKinema Hùng Vương Plaza',
-      location: 'Level 7, Hung Vuong Plaza, District 5, Ho Chi Minh City',
-      formats: [
-        {
-          id: 1,
-          name: '2D Vietnam Sub',
-          times: [
-            { id: 1, time: '09:40' },
-            { id: 2, time: '12:20' },
-            { id: 3, time: '15:10' },
-            { id: 4, time: '17:00' },
-            { id: 5, time: '19:05' }
-          ]
-        }
-      ]
-    },
-    {
-      id: 2,
-      theater: 'BKinema Crescent Mall',
-      location: '101 Ton Dat Tien St., District 7',
-      formats: [
-        {
-          id: 2,
-          name: '2D Cinema',
-          times: [
-            { id: 6, time: '11:20' },
-            { id: 7, time: '14:10' },
-            { id: 8, time: '17:00' },
-            { id: 9, time: '19:50' },
-            { id: 10, time: '21:40' },
-            { id: 11, time: '22:30' }
-          ]
-        },
-        {
-          id: 3,
-          name: 'LAMOUR Cinema',
-          times: [
-            { id: 12, time: '10:30' },
-            { id: 13, time: '13:20' },
-            { id: 14, time: '16:10' },
-            { id: 15, time: '19:00' }
-          ]
-        },
-        {
-          id: 4,
-          name: 'CINELIVINGROOM Cinema',
-          times: [
-            { id: 16, time: '09:40' },
-            { id: 17, time: '12:30' },
-            { id: 18, time: '15:15' },
-            { id: 19, time: '18:00' },
-            { id: 20, time: '20:40' }
-          ]
-        }
-      ]
-    },
-    {
-      id: 3,
-      theater: 'BKinema Pandora City',
-      location: '65 Le Loi St., District 1',
-      formats: [
-        {
-          id: 5,
-          name: '2D Cinema',
-          times: [
-            { id: 21, time: '09:40' },
-            { id: 22, time: '14:50' },
-            { id: 23, time: '20:15' }
-          ]
-        }
-      ]
-    }
-  ];
 
   // Helper to format date
   const formatDate = (dateString) => {
@@ -308,10 +231,10 @@ export default function MovieDetailPage() {
                 )}
                 <InfoRow icon="calendar" label="Release date" value={formatDate(movie.releaseDate)} />
                 <InfoRow icon="ticket" label="Duration" value={formatDuration(movie.duration)} />
-                <InfoRow 
-                  icon="info" 
-                  label="Language" 
-                  value={formatLanguageDisplay(movie.language, movie.subtitle, movie.dubbing)} 
+                <InfoRow
+                  icon="info"
+                  label="Language"
+                  value={formatLanguageDisplay(movie.language, movie.subtitle, movie.dubbing)}
                 />
 
                 <div className="flex items-start gap-3">
@@ -375,7 +298,6 @@ export default function MovieDetailPage() {
         <BookingModal
           movie={movie}
           dates={dates}
-          theaterShowtimes={theaterShowtimes}
           onClose={() => setShowBookingModal(false)}
         />
       )}
@@ -395,14 +317,95 @@ function InfoRow({ icon, label, value }) {
   );
 }
 
-function BookingModal({ movie, dates, theaterShowtimes, onClose }) {
+function BookingModal({ movie, dates, onClose }) {
   const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState(dates[0].fullDate);
-  const [selectedCity, setSelectedCity] = useState('Ho Chi Minh');
+  const [selectedCity, setSelectedCity] = useState('Ho Chi Minh City');
   const [selectedFormat, setSelectedFormat] = useState('2D Vietnam Sub');
+  const [theaters, setTheaters] = useState([]);
+  const [loadingTheaters, setLoadingTheaters] = useState(false);
+  const [theaterSchedules, setTheaterSchedules] = useState({});
 
-  const cities = ['Ho Chi Minh', 'Ha Noi', 'Da Nang', 'Can Tho', 'Dong Nai', 'Hai Phong', 'Quang Ninh', 'Ba Ria - Vung Tau', 'Binh Dinh', 'Binh Duong', 'Dak Lak', 'Tra Vinh', 'Yen Bai', 'Vinh Long', 'Kien Giang', 'Hau Giang', 'Ha Tinh', 'Phu Yen', 'Dong Thap', 'Bac Lieu', 'Hung Yen', 'Kon Tum'];
+  const cities = [
+    'Ho Chi Minh City',
+    'Ha Noi',
+    'Da Nang',
+    'Can Tho',
+    'Dong Nai',
+    'Hai Phong',
+    'Quang Ninh',
+    'Ba Ria - Vung Tau',
+    'Binh Dinh',
+    'Binh Duong',
+    'Dak Lak',
+    'Tra Vinh',
+    'Yen Bai',
+    'Vinh Long',
+    'Kien Giang',
+    'Hau Giang',
+    'Ha Tinh',
+    'Phu Yen',
+    'Dong Thap',
+    'Bac Lieu',
+    'Hung Yen',
+    'Khanh Hoa',
+    'Kon Tum',
+    'Lang Son',
+    'Nghe An',
+    'Phu Tho',
+    'Quang Ngai',
+    'Soc Trang',
+    'Son La',
+    'Tay Ninh',
+    'Thai Nguyen',
+    'Tien Giang'
+  ];
   const formats = ['2D Vietnam Sub', 'IMAX2D Vietnam Sub', '4DX2D Vietnam Sub', 'SCREENX-2D Vietnam Sub', 'ULTRA 4DX-SCX2D Vietnam Sub'];
+
+  // Fetch theaters when city changes
+  useEffect(() => {
+    const fetchTheaters = async () => {
+      try {
+        setLoadingTheaters(true);
+        const data = await theaterService.getTheaters({ city: selectedCity });
+        setTheaters(data || []);
+      } catch (err) {
+        console.error('Error fetching theaters:', err);
+        setTheaters([]);
+      } finally {
+        setLoadingTheaters(false);
+      }
+    };
+
+    fetchTheaters();
+  }, [selectedCity]);
+
+  // Fetch schedules for all theaters when date changes
+  useEffect(() => {
+    const fetchSchedules = async () => {
+      if (theaters.length === 0) return;
+
+      const schedules = {};
+      for (const theater of theaters) {
+        try {
+          const schedule = await theaterService.getSchedule(theater.id, selectedDate);
+
+          // Filter schedule to only include showtimes for the current movie
+          const filteredSchedule = schedule ? schedule.filter(showtime =>
+            String(showtime.movie_id) === String(movie.id)
+          ) : [];
+
+          schedules[theater.id] = filteredSchedule;
+        } catch (err) {
+          console.error(`Error fetching schedule for theater ${theater.id}:`, err);
+          schedules[theater.id] = null;
+        }
+      }
+      setTheaterSchedules(schedules);
+    };
+
+    fetchSchedules();
+  }, [theaters, selectedDate, movie]);
 
   const handleShowtimeClick = (theaterId, showtimeId) => {
     const formattedDate = selectedDate.replace(/-/g, '');
@@ -483,30 +486,72 @@ function BookingModal({ movie, dates, theaterShowtimes, onClose }) {
 
           {/* Theater Showtimes - Vertical List */}
           <div className="px-6 py-6">
-            <div className="space-y-6">
-              {theaterShowtimes.map((theater, idx) => (
-                <div key={idx} className="border-b pb-6 last:border-b-0">
-                  <h3 className="text-lg font-bold text-gray-900 mb-1">{theater.theater}</h3>
+            {loadingTheaters ? (
+              <div className="text-center py-12">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                <p className="text-gray-600 mt-4">Loading theaters...</p>
+              </div>
+            ) : theaters.length === 0 ? (
+              <div className="text-center py-12">
+                <Icon name="alert-circle" className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                <p className="text-gray-600">No theaters found in {selectedCity}</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {theaters.map((theater) => {
+                  const schedule = theaterSchedules[theater.id];
 
-                  {theater.formats.map((format, fIdx) => (
-                    <div key={fIdx} className="mt-4">
-                      <p className="text-sm font-semibold text-gray-800 mb-3">{format.name}</p>
-                      <div className="flex flex-wrap gap-2">
-                        {format.times.map((showtime, tIdx) => (
-                          <button
-                            key={tIdx}
-                            onClick={() => handleShowtimeClick(theater.id, showtime.id)}
-                            className="px-4 py-2 text-sm border border-gray-300 hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-colors font-medium"
-                          >
-                            {showtime.time}
-                          </button>
-                        ))}
-                      </div>
+                  return (
+                    <div key={theater.id} className="border-b pb-6 last:border-b-0">
+                      <h3 className="text-lg font-bold text-gray-900 mb-1">{theater.name}</h3>
+                      <p className="text-sm text-gray-600 mb-3">
+                        {theater.street}, {theater.district}, {theater.city}
+                      </p>
+
+                      {!schedule ? (
+                        <p className="text-sm text-gray-500 italic">Loading schedule...</p>
+                      ) : Array.isArray(schedule) && schedule.length > 0 ? (
+                        <div className="mt-4">
+                          {/* Group showtimes by auditorium type */}
+                          {(() => {
+                            const groupedByType = schedule.reduce((acc, showtime) => {
+                              const type = showtime.auditorium_type || 'Standard';
+                              if (!acc[type]) {
+                                acc[type] = [];
+                              }
+                              acc[type].push(showtime);
+                              return acc;
+                            }, {});
+
+                            return Object.entries(groupedByType).map(([type, showtimes]) => (
+                              <div key={type} className="mb-4 last:mb-0">
+                                <p className="text-sm font-semibold text-gray-800 mb-2">
+                                  {type} Cinema
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                  {showtimes.map((showtime) => (
+                                    <button
+                                      key={showtime.showtime_id}
+                                      onClick={() => handleShowtimeClick(theater.id, showtime.showtime_id)}
+                                      className="px-4 py-2 text-sm border border-gray-300 hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-colors font-medium"
+                                      title={`${showtime.start_time} - ${showtime.end_time} | Auditorium ${showtime.auditorium_number}`}
+                                    >
+                                      {showtime.start_time.substring(0, 5)}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            ));
+                          })()}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500 italic">No showtimes available for this date</p>
+                      )}
                     </div>
-                  ))}
-                </div>
-              ))}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -29,7 +29,7 @@ function App() {
       <BookingProvider>
         <div className="min-h-screen flex flex-col">
           <Header />
-          
+
           <main className="flex-1">
             <Routes>
               <Route path="/" element={<HomePage />} />
@@ -44,6 +44,7 @@ function App() {
               <Route path="/booking/tickets/theater/:theaterId/showtime/:showtimeId/date/:date" element={<BookingPage />} />
               <Route path="/booking/combo/theater/:theaterId/showtime/:showtimeId/date/:date" element={<ComboPage />} />
               <Route path="/booking/payment/theater/:theaterId/showtime/:showtimeId/date/:date" element={<PaymentPage />} />
+              <Route path="/payment/:bookingId" element={<PaymentPage />} />
               <Route path="/theaters" element={<TheatersPage />} />
               <Route path="/gift" element={<GiftCardPage />} />
               <Route path="/gift-cards" element={<GiftCardPage />} />
@@ -55,7 +56,7 @@ function App() {
               <Route path="/register" element={<RegisterPage />} />
             </Routes>
           </main>
-          
+
           <Footer />
         </div>
       </BookingProvider>

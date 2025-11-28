@@ -1,0 +1,33 @@
+import { Body, Controller, Post, Get, UseGuards, Request } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { BookingService } from './booking.service';
+import { StartBookingDto } from './dto/start-booking.dto';
+import { UpdateFwbDto } from './dto/update-fwb.dto';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { RolesGuard } from '../../common/guards/roles.guard';
+
+@ApiTags('Bookings')
+@Controller('booking')
+export class BookingController {
+  constructor(private readonly bookingService: BookingService) {}
+
+  @Post('start')
+  @ApiOperation({ summary: 'create new booking and hold seat' })
+  async startBooking(@Body() dto: StartBookingDto) {
+    return this.bookingService.startBooking(dto);
+  }
+
+  @Post('fwb')
+  @ApiOperation({ summary: 'update list of fwb for booking' })
+  async updateFwb(@Body() dto: UpdateFwbDto) {
+    return this.bookingService.updateBookingFwb(dto);
+  }
+
+  @Get('my-bookings')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get all bookings for logged-in customer' })
+  async getMyBookings(@Request() req) {
+    return this.bookingService.getMyBookings(req.user.userId);
+  }
+}

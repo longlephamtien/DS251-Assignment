@@ -69,4 +69,40 @@ export class MovieController {
             );
         }
     }
+
+    @Get('id/:id')
+    async getMovieById(
+        @Param('id') id: number,
+    ): Promise<ApiResponseDto<MovieResponseDto>> {
+        try {
+            const movie = await this.movieService.getMovieById(Number(id));
+
+            if (!movie) {
+                throw new HttpException(
+                    {
+                        success: false,
+                        message: `Movie with id ${id} not found`,
+                    },
+                    HttpStatus.NOT_FOUND,
+                );
+            }
+
+            return {
+                success: true,
+                data: movie,
+                message: 'Retrieved movie successfully',
+            };
+        } catch (error) {
+            if (error instanceof HttpException) {
+                throw error;
+            }
+            throw new HttpException(
+                {
+                    success: false,
+                    message: error.message || 'Failed to retrieve movie',
+                },
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
 }

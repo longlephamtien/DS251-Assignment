@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Icon from '../components/common/Icon';
+import Notification from '../components/common/Notification';
 import { useBooking } from '../context/BookingContext';
+import { startBooking, confirmPayment, cancelPayment, generateTransactionId, calculateFinalAmount } from '../api/bookingService';
+import { couponService } from '../services';
 import atmLogo from '../assets/media/payment/atm-logo.png';
 import visaMasterLogo from '../assets/media/payment/visa-mastercard-logo.png';
 import momoLogo from '../assets/media/payment/momo-logo.png';
@@ -10,20 +13,110 @@ import vnpayLogo from '../assets/media/payment/vnpay-logo.png';
 import shopeepayLogo from '../assets/media/payment/shopeepay-logo.png';
 
 export default function PaymentPage() {
-  const { date } = useParams();
+  const { date, bookingId: routeBookingId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { bookingData } = useBooking();
-  
-  // Get booking data from location state or context
-  const { 
-    selectedSeats = bookingData.selectedSeats || [], 
-    bookingInfo = bookingData.bookingInfo || {}, 
-    seatTotal = bookingData.seatTotal || 0,
+  const { bookingData, updateBookingData } = useBooking();
+
+  console.log('🔍 URL Params:', { date, routeBookingId });
+  console.log('🔍 BookingContext:', bookingData);
+
+  // Get booking data from location state (coming from My Bookings) or context (booking flow)
+  // Parse to number because URL params are always strings
+  const [currentBookingId, setCurrentBookingId] = useState(
+    routeBookingId ? parseInt(routeBookingId, 10) : bookingData.bookingId
+  );
+
+  console.log('🎯 Initial currentBookingId:', currentBookingId, typeof currentBookingId);
+
+  // Use ref to prevent double booking creation (persists across re-renders)
+  const bookingCreatedRef = useRef(false);
+
+  // Create booking on mount if coming from booking flow (no bookingId yet)
+  useEffect(() => {
+    const createBookingIfNeeded = async () => {
+      // Skip if we already have a bookingId (from URL or context)
+      if (currentBookingId) {
+        console.log('✅ Booking already exists:', currentBookingId);
+        return;
+      }
+
+      // Skip if booking already created (prevent double call in StrictMode)
+      if (bookingCreatedRef.current) {
+        console.log('⏳ Booking creation already in progress or completed, skipping...');
+        return;
+      }
+
+      // Skip if no seat/showtime data (invalid state)
+      if (!bookingData.customerId || !bookingData.showtimeId || !bookingData.seatIds) {
+        console.error('❌ Missing booking data:', bookingData);
+        setNotification({
+          isOpen: true,
+          title: 'Error',
+          message: 'Missing booking information. Please start from seat selection.',
+          type: 'error'
+        });
+        setTimeout(() => navigate('/'), 2000);
+        return;
+      }
+
+      // Mark as creating to prevent duplicate calls
+      bookingCreatedRef.current = true;
+      console.log('🚀 Creating new booking with seats + F&B...');
+      
+      try {
+        const response = await startBooking(
+          bookingData.customerId,
+          bookingData.showtimeId,
+          bookingData.seatIds,
+          bookingData.fwbItems || null // F&B items from ComboPage
+        );
+
+        const newBookingId = parseInt(response.bookingId);
+        console.log('✅ Booking created:', newBookingId);
+
+        setCurrentBookingId(newBookingId);
+        updateBookingData({ bookingId: newBookingId });
+      } catch (error) {
+        console.error('❌ Failed to create booking:', error);
+        // Reset flag on error so user can retry
+        bookingCreatedRef.current = false;
+        setNotification({
+          isOpen: true,
+          title: 'Booking Failed',
+          message: error.message || 'Failed to create booking',
+          type: 'error'
+        });
+        setTimeout(() => navigate('/'), 2000);
+      }
+    };
+
+    createBookingIfNeeded();
+  }, []); // Run once on mount
+
+  // Check if we have required data (after booking creation attempt)
+  useEffect(() => {
+    if (!currentBookingId && !bookingData.seatIds) {
+      setNotification({
+        isOpen: true,
+        title: 'Error',
+        message: 'No booking data found',
+        type: 'error'
+      });
+      setTimeout(() => navigate('/'), 2000);
+    }
+  }, [currentBookingId, bookingData.seatIds, navigate]);
+
+  const {
+    selectedSeats = bookingData.selectedSeats || [],
+    bookingInfo = bookingData.bookingInfo || location.state?.bookingInfo || {
+      movie: { title: 'Unknown Movie' }
+    },
+    seatTotal = location.state?.seatTotal || bookingData.seatTotal || 0,
     seatsByType = bookingData.seatsByType || {},
-    comboTotal = bookingData.comboTotal || 0,
-    totalPrice = bookingData.totalPrice || 0
-  } = location.state || bookingData;
+    comboTotal = location.state?.comboTotal || bookingData.comboTotal || 0,
+    totalPrice = location.state?.totalPrice || bookingData.totalPrice || 0
+  } = location.state || {};
 
   const [cgvPoints] = useState(0);
   const [pointsToUse, setPointsToUse] = useState(0);
@@ -31,10 +124,74 @@ export default function PaymentPage() {
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [countdown, setCountdown] = useState(300); // 5 minutes in seconds
   const [expandedSection, setExpandedSection] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [notification, setNotification] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info'
+  });
+
+  // Coupon states - Support multiple coupons
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupons, setAppliedCoupons] = useState([]); // Changed to array
+  const [couponError, setCouponError] = useState('');
+  const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
+  const [availableCoupons, setAvailableCoupons] = useState([]);
+  const [isLoadingCoupons, setIsLoadingCoupons] = useState(false);
+
+  // Price breakdown from backend
+  const [priceBreakdown, setPriceBreakdown] = useState({
+    baseSeatPrice: 0,
+    fwbPrice: 0,
+    subtotal: 0,
+    couponDiscount: 0,
+    boxOfficeDiscount: 0,
+    concessionDiscount: 0,
+    membershipTier: null,
+    finalAmount: 0
+  });
+
+
+  console.log("Booking Data:", bookingData);
 
   const toggleSection = (sectionId) => {
     setExpandedSection(expandedSection === sectionId ? null : sectionId);
   };
+
+  // Load price breakdown when component mounts or booking changes
+  useEffect(() => {
+    const loadPriceBreakdown = async () => {
+      if (!currentBookingId) {
+        console.log('⚠️ No booking ID, skipping price breakdown load');
+        return;
+      }
+
+      console.log('🔄 Loading price breakdown for booking:', currentBookingId);
+
+      try {
+        const breakdown = await calculateFinalAmount(currentBookingId);
+        console.log('✅ Price breakdown loaded:', breakdown);
+        setPriceBreakdown(breakdown);
+      } catch (error) {
+        console.error('❌ Failed to load price breakdown:', error);
+        console.error('Error details:', error.response?.data || error.message);
+        // Fallback to basic calculation
+        setPriceBreakdown({
+          baseSeatPrice: seatTotal || 0,
+          fwbPrice: comboTotal || 0,
+          subtotal: totalPrice || 0,
+          couponDiscount: 0,
+          boxOfficeDiscount: 0,
+          concessionDiscount: 0,
+          membershipTier: null,
+          finalAmount: totalPrice || 0
+        });
+      }
+    };
+
+    loadPriceBreakdown();
+  }, [currentBookingId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Countdown timer
   useEffect(() => {
@@ -42,7 +199,8 @@ export default function PaymentPage() {
       setCountdown(prev => {
         if (prev <= 1) {
           clearInterval(timer);
-          // Navigate back or show timeout message
+          // Auto-cancel booking when time runs out
+          handleTimeout();
           return 0;
         }
         return prev - 1;
@@ -50,7 +208,28 @@ export default function PaymentPage() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleTimeout = async () => {
+    if (!currentBookingId) return;
+
+    try {
+      await cancelPayment(currentBookingId, 'Payment timeout - 5 minutes exceeded');
+      setNotification({
+        isOpen: true,
+        title: 'Payment Timeout',
+        message: 'Your booking has been cancelled due to timeout. Please start a new booking.',
+        type: 'error'
+      });
+
+      // Redirect to home after 3 seconds
+      setTimeout(() => {
+        navigate('/');
+      }, 3000);
+    } catch (error) {
+      console.error('Failed to cancel booking on timeout:', error);
+    }
+  };
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -60,6 +239,27 @@ export default function PaymentPage() {
 
   const { mins, secs } = formatTime(countdown);
 
+  // Load available coupons when coupon section is expanded
+  useEffect(() => {
+    const loadCoupons = async () => {
+      if (expandedSection === 'coupon' && availableCoupons.length === 0) {
+        setIsLoadingCoupons(true);
+        try {
+          const couponsData = await couponService.getMyCoupons();
+          const available = couponsData.coupons.filter(c => c.state === 'Available');
+          setAvailableCoupons(available);
+        } catch (error) {
+          console.error('Failed to load coupons:', error);
+          // User might not be logged in, that's okay
+          setAvailableCoupons([]);
+        } finally {
+          setIsLoadingCoupons(false);
+        }
+      }
+    };
+    loadCoupons();
+  }, [expandedSection]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleApplyPoints = () => {
     if (pointsToUse > cgvPoints) {
       alert('Not enough points');
@@ -68,20 +268,221 @@ export default function PaymentPage() {
     // Apply points logic
   };
 
-  const discount = pointsToUse;
-  const finalTotal = totalPrice - discount;
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) {
+      setCouponError('Please enter a coupon code');
+      return;
+    }
 
-  const handlePayment = () => {
+    // Check if coupon already applied
+    if (appliedCoupons.find(c => c.couponCode.toUpperCase() === couponCode.toUpperCase())) {
+      setCouponError('This coupon has already been applied');
+      return;
+    }
+
+    setIsValidatingCoupon(true);
+    setCouponError('');
+
+    try {
+      // First validate the coupon
+      const couponData = await couponService.validateCoupon(couponCode);
+
+      // Then apply it to the booking via backend
+      await couponService.applyCoupon(currentBookingId, couponData.couponId);
+
+      // Reload price breakdown to get updated discount
+      const breakdown = await calculateFinalAmount(currentBookingId);
+      setPriceBreakdown(breakdown);
+
+      setAppliedCoupons([...appliedCoupons, couponData]);
+      setCouponCode(''); // Clear input after successful apply
+      setCouponError('');
+      setNotification({
+        isOpen: true,
+        title: 'Success',
+        message: `Coupon applied! Discount: ₫${couponData.discountValue.toLocaleString()}`,
+        type: 'success'
+      });
+    } catch (error) {
+      setCouponError(error.message);
+      setNotification({
+        isOpen: true,
+        title: 'Coupon Error',
+        message: error.message,
+        type: 'error'
+      });
+    } finally {
+      setIsValidatingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = (couponId) => {
+    setAppliedCoupons(appliedCoupons.filter(c => c.couponId !== couponId));
+    setCouponError('');
+  };
+
+  const handleSelectCoupon = async (coupon) => {
+    // Check if coupon already applied
+    if (appliedCoupons.find(c => c.couponId === coupon.couponId)) {
+      setNotification({
+        isOpen: true,
+        title: 'Already Applied',
+        message: 'This coupon has already been applied',
+        type: 'warning'
+      });
+      return;
+    }
+
+    try {
+      // Apply coupon to booking via backend
+      await couponService.applyCoupon(currentBookingId, parseInt(coupon.couponId));
+
+      // Reload price breakdown to get updated discount
+      const breakdown = await calculateFinalAmount(currentBookingId);
+      console.log('Price breakdown after applying coupon:', breakdown);
+      setPriceBreakdown(breakdown);
+
+      const couponData = {
+        couponId: parseInt(coupon.couponId),
+        couponCode: coupon.couponCode,
+        couponType: coupon.couponType,
+        discountValue: parseFloat(coupon.balance) || 0,
+        expiryDate: coupon.expiryDate,
+      };
+
+      setAppliedCoupons([...appliedCoupons, couponData]);
+      setCouponError('');
+      setNotification({
+        isOpen: true,
+        title: 'Success',
+        message: `Coupon ${coupon.couponCode} applied! Discount: ₫${parseFloat(coupon.balance).toLocaleString()}`,
+        type: 'success'
+      });
+    } catch (error) {
+      setNotification({
+        isOpen: true,
+        title: 'Error',
+        message: error.message || 'Failed to apply coupon',
+        type: 'error'
+      });
+    }
+  };
+
+  // Calculate total discount from backend data
+  const totalDiscount = (priceBreakdown.boxOfficeDiscount || 0) +
+    (priceBreakdown.concessionDiscount || 0) +
+    (priceBreakdown.couponDiscount || 0);
+
+  const finalTotal = priceBreakdown.finalAmount || 0;
+
+  const handlePayment = async () => {
     if (!selectedPayment) {
-      alert('Please select a payment method');
+      setNotification({
+        isOpen: true,
+        title: 'Payment Method Required',
+        message: 'Please select a payment method to continue.',
+        type: 'warning'
+      });
       return;
     }
     if (!agreeTerms) {
-      alert('Please agree to the Terms and Conditions');
+      setNotification({
+        isOpen: true,
+        title: 'Terms Required',
+        message: 'Please agree to the Terms and Conditions to continue.',
+        type: 'warning'
+      });
       return;
     }
-    // Process payment
-    alert('Processing payment...');
+
+    if (!currentBookingId) {
+      setNotification({
+        isOpen: true,
+        title: 'Booking Error',
+        message: 'No booking found. Please start from seat selection.',
+        type: 'error'
+      });
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Map payment method names
+      const paymentMethodMap = {
+        'atm': 'ATM Card',
+        'credit': 'Credit/Debit Card',
+        'momo': 'MoMo',
+        'zalopay': 'ZaloPay',
+        'vnpay': 'VNPAY',
+        'shopeepay': 'ShopeePay'
+      };
+
+      const paymentMethod = paymentMethodMap[selectedPayment] || selectedPayment;
+      const transactionId = generateTransactionId();
+      const durationInMinutes = Math.ceil((300 - countdown) / 60); // Calculate how long payment took
+
+      // Call API to confirm payment
+      const response = await confirmPayment(
+        parseInt(currentBookingId),
+        paymentMethod,
+        transactionId,
+        finalTotal,
+        durationInMinutes
+      );
+
+      // Apply all coupons to the booking after successful payment
+      if (appliedCoupons.length > 0) {
+        console.log('🎟️ Applying coupons to booking:', appliedCoupons.map(c => c.couponId));
+        try {
+          for (const coupon of appliedCoupons) {
+            console.log('🎟️ Applying coupon:', coupon.couponId, 'to booking:', currentBookingId);
+            const result = await couponService.applyCoupon(parseInt(currentBookingId), coupon.couponId);
+            console.log('✅ Coupon applied successfully:', result);
+          }
+          console.log('🎟️ All coupons applied, reloading coupon list...');
+          // Reload available coupons after applying to refresh the list
+          try {
+            const couponsData = await couponService.getMyCoupons();
+            const available = couponsData.coupons.filter(c => c.state === 'Available');
+            console.log('✅ Reloaded coupons, available count:', available.length);
+            setAvailableCoupons(available);
+          } catch (reloadError) {
+            console.error('❌ Failed to reload coupons:', reloadError);
+          }
+        } catch (couponError) {
+          console.error('❌ Failed to apply coupons to booking:', couponError);
+          // Payment already succeeded, so just log the error
+          // Coupons might need manual intervention
+        }
+      }
+
+      // Show success notification
+      setNotification({
+        isOpen: true,
+        title: 'Payment Successful',
+        message: `Your booking has been confirmed! Payment ID: ${response.paymentId}`,
+        type: 'success'
+      });
+
+      // Clear booking data
+      // clearBookingData(); // Uncomment if you want to clear after success
+
+      // Redirect to customer bookings page after 2 seconds
+      setTimeout(() => {
+        navigate('/customer', { state: { tab: 'bookings', paymentSuccess: true } });
+      }, 2000);
+
+    } catch (error) {
+      setNotification({
+        isOpen: true,
+        title: 'Payment Failed',
+        message: error.message || 'Failed to process payment. Please try again.',
+        type: 'error'
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handlePrevious = () => {
@@ -110,8 +511,8 @@ export default function PaymentPage() {
                   <h3 className="font-bold text-gray-900">
                     <span className="text-gray-600">Step 1: </span>METHOD OF DISCOUNT
                   </h3>
-                  <button 
-                    onClick={() => {/* Reset logic */}}
+                  <button
+                    onClick={() => {/* Reset logic */ }}
                     className="flex items-center gap-1 text-sm text-gray-700 hover:text-gray-900"
                   >
                     <Icon name="refresh" className="w-4 h-4" />
@@ -162,23 +563,94 @@ export default function PaymentPage() {
                     </button>
                     {expandedSection === 'coupon' && (
                       <div className="mt-2 p-4 bg-white border border-gray-200 rounded">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <div className="flex justify-between items-center mb-2">
-                              <label className="font-semibold">Movie</label>
-                              <button className="bg-primary hover:bg-secondary text-white px-3 py-1 rounded text-sm">
-                                Register
-                              </button>
-                            </div>
+                        {/* Manual Coupon Code Entry */}
+                        <label className="block text-sm font-semibold mb-2">Enter Coupon Code</label>
+                        <div className="flex gap-2 mb-4">
+                          <input
+                            type="text"
+                            value={couponCode}
+                            onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                            className="border border-gray-300 rounded px-3 py-2 flex-1 uppercase"
+                            placeholder="Enter coupon code"
+                          />
+                          <button
+                            onClick={handleApplyCoupon}
+                            disabled={isValidatingCoupon}
+                            className="bg-primary hover:bg-secondary text-white px-6 py-2 rounded font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed"
+                          >
+                            {isValidatingCoupon ? 'Checking...' : 'Apply'}
+                          </button>
+                        </div>
+
+                        {couponError && (
+                          <p className="text-red-600 text-sm mb-2">{couponError}</p>
+                        )}
+
+                        {/* Applied Coupons List */}
+                        {appliedCoupons.length > 0 && (
+                          <div className="mb-4 space-y-2">
+                            <p className="text-sm font-semibold">Applied Coupons ({appliedCoupons.length})</p>
+                            {appliedCoupons.map((coupon) => (
+                              <div key={coupon.couponId} className="bg-green-50 border border-green-200 rounded p-3">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex-1">
+                                    <p className="text-sm font-semibold text-green-800">✓ {coupon.couponCode}</p>
+                                    <p className="text-xs text-green-600">Discount: ₫{coupon.discountValue.toLocaleString()}</p>
+                                  </div>
+                                  <button
+                                    onClick={() => handleRemoveCoupon(coupon.couponId)}
+                                    className="text-red-600 hover:text-red-800 text-sm font-semibold"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                          <div>
-                            <div className="flex justify-between items-center mb-2">
-                              <label className="font-semibold">Concession</label>
-                              <button className="bg-primary hover:bg-secondary text-white px-3 py-1 rounded text-sm">
-                                Register
-                              </button>
+                        )}
+
+                        {/* Available Coupons List */}
+                        <div className="border-t pt-4">
+                          <p className="text-sm font-semibold mb-3">Your Available Coupons</p>
+                          {isLoadingCoupons ? (
+                            <p className="text-sm text-gray-500 text-center py-4">Loading coupons...</p>
+                          ) : availableCoupons.length > 0 ? (
+                            <div className="space-y-2 max-h-60 overflow-y-auto">
+                              {availableCoupons.map((coupon) => (
+                                <div
+                                  key={coupon.couponId}
+                                  className="border border-gray-200 rounded p-3 hover:border-primary hover:bg-blue-50 cursor-pointer transition-all"
+                                  onClick={() => handleSelectCoupon(coupon)}
+                                >
+                                  <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                      <p className="font-bold text-gray-900">{coupon.couponCode}</p>
+                                      <p className="text-xs text-gray-600 mt-1">
+                                        Type: {coupon.couponType}
+                                      </p>
+                                      {coupon.expiryDate && (
+                                        <p className="text-xs text-gray-500">
+                                          Expires: {new Date(coupon.expiryDate).toLocaleDateString()}
+                                        </p>
+                                      )}
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="text-lg font-bold text-primary">
+                                        ₫{parseFloat(coupon.balance).toLocaleString()}
+                                      </p>
+                                      <button className="text-xs text-primary hover:underline mt-1">
+                                        Select
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                          </div>
+                          ) : (
+                            <p className="text-sm text-gray-500 text-center py-4">
+                              No available coupons. Please login or check your account.
+                            </p>
+                          )}
                         </div>
                       </div>
                     )}
@@ -212,7 +684,7 @@ export default function PaymentPage() {
                           </button>
                         </div>
                         <p className="text-right text-sm">
-                          Discount: <span className="font-bold">₫{discount.toFixed(2)}</span>
+                          Discount: <span className="font-bold">₫{totalDiscount.toFixed(2)}</span>
                         </p>
                       </div>
                     )}
@@ -422,6 +894,12 @@ export default function PaymentPage() {
                     <span className="text-gray-700">Combo</span>
                     <span className="font-semibold text-gray-900">₫{comboTotal.toLocaleString()}</span>
                   </div>
+                  {priceBreakdown.couponDiscount > 0 && (
+                    <div className="flex justify-between text-sm text-green-600">
+                      <span className="font-semibold">Coupon Discount</span>
+                      <span className="font-semibold">-₫{priceBreakdown.couponDiscount.toLocaleString()}</span>
+                    </div>
+                  )}
                   <div className="border-t border-gray-300 pt-3 mt-2">
                     <p className="font-bold text-gray-900 text-center">₫{totalPrice.toLocaleString()}</p>
                   </div>
@@ -434,7 +912,38 @@ export default function PaymentPage() {
                   <h3 className="font-bold text-center">Discount</h3>
                 </div>
                 <div className="p-6">
-                  <p className="font-bold text-gray-900 text-center">₫{discount.toFixed(2)}</p>
+                  {priceBreakdown.membershipTier && (
+                    <div className="text-center mb-2">
+                      <p className="text-xs font-semibold text-purple-600 mb-1">
+                        {priceBreakdown.membershipTier} Member Benefits
+                      </p>
+                      {priceBreakdown.boxOfficeDiscount > 0 && (
+                        <p className="text-xs text-green-600">
+                          Ticket Discount: -₫{priceBreakdown.boxOfficeDiscount.toLocaleString()}
+                        </p>
+                      )}
+                      {priceBreakdown.concessionDiscount > 0 && (
+                        <p className="text-xs text-green-600">
+                          F&B Discount: -₫{priceBreakdown.concessionDiscount.toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {priceBreakdown.couponDiscount > 0 && (
+                    <div className="text-center mb-2">
+                      <p className="text-xs font-semibold text-blue-600 mb-1">Coupon Applied</p>
+                      <p className="text-xs text-green-600">
+                        Coupon Discount: -₫{priceBreakdown.couponDiscount.toLocaleString()}
+                      </p>
+                    </div>
+                  )}
+                  {totalDiscount === 0 && (
+                    <p className="text-xs text-gray-500 text-center mb-2">No discount applied</p>
+                  )}
+                  <p className="font-bold text-gray-900 text-center">₫{totalDiscount.toLocaleString()}</p>
+                  <p className="text-xs text-gray-500 text-center mt-1">
+                    (Box: ₫{priceBreakdown.boxOfficeDiscount || 0} | F&B: ₫{priceBreakdown.concessionDiscount || 0} | Coupon: ₫{priceBreakdown.couponDiscount || 0})
+                  </p>
                 </div>
               </div>
 
@@ -510,7 +1019,10 @@ export default function PaymentPage() {
                 <p className="text-sm text-gray-300">Combo Price</p>
                 <p className="font-bold">₫{comboTotal.toLocaleString()}</p>
                 <p className="text-sm text-gray-300">Discount</p>
-                <p className="font-bold">₫{discount.toFixed(2)}</p>
+                <p className="font-bold text-green-400">₫{totalDiscount.toLocaleString()}</p>
+                {priceBreakdown.membershipTier && (
+                  <p className="text-xs text-gray-400">({priceBreakdown.membershipTier} Member)</p>
+                )}
                 <p className="text-sm text-gray-300 mt-2">Total</p>
                 <p className="font-bold text-xl text-yellow-400">₫{finalTotal.toLocaleString()}</p>
               </div>
@@ -518,16 +1030,33 @@ export default function PaymentPage() {
               {/* Payment Button */}
               <button
                 onClick={handlePayment}
-                disabled={!selectedPayment || !agreeTerms}
+                disabled={!selectedPayment || !agreeTerms || isLoading}
                 className="flex items-center gap-2 bg-red-600 hover:bg-red-700 px-6 py-3 rounded transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
-                <Icon name="credit-card" className="w-5 h-5" />
-                <span className="font-semibold">PAYMENT</span>
+                {isLoading ? (
+                  <>
+                    <span className="font-semibold">PROCESSING...</span>
+                  </>
+                ) : (
+                  <>
+                    <Icon name="credit-card" className="w-5 h-5" />
+                    <span className="font-semibold">PAYMENT</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Notification Modal */}
+      <Notification
+        isOpen={notification.isOpen}
+        onClose={() => setNotification({ ...notification, isOpen: false })}
+        title={notification.title}
+        message={notification.message}
+        type={notification.type}
+      />
     </div>
   );
 }
