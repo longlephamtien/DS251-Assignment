@@ -125,4 +125,26 @@ export class BookingService {
       );
     }
   }
+
+  /**
+   * Release booking seats without creating cancelled record
+   * Used when user goes back to change selection
+   */
+  async releaseBooking(bookingId: number) {
+    try {
+      await this.dataSource.query(
+        'CALL sp_release_booking(?)',
+        [bookingId]
+      );
+
+      return {
+        bookingId,
+        message: 'Booking released successfully'
+      };
+    } catch (error: any) {
+      throw new InternalServerErrorException(
+        error.sqlMessage || error.message || 'Failed to release booking',
+      );
+    }
+  }
 }

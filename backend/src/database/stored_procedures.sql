@@ -1,7 +1,7 @@
 -- ============================================
 -- Stored Procedures
 -- Database: bkinema
--- Generated: 2025-11-28T16:54:41.138Z
+-- Generated: 2025-11-29T21:52:07.338Z
 -- ============================================
 
 -- Procedure: sp_apply_coupon
@@ -80,7 +80,7 @@ CREATE DEFINER="avnadmin"@"%" PROCEDURE "sp_calculate_final_amount"(
     OUT p_membership_tier VARCHAR(255),
     OUT p_final_amount DECIMAL(10,2)
 )
-BEGIN
+sp_label: BEGIN
     DECLARE v_customer_id BIGINT;
     DECLARE v_membership_name VARCHAR(255);
     DECLARE v_box_discount_percent DECIMAL(5,2) DEFAULT 0;
@@ -88,6 +88,7 @@ BEGIN
     DECLARE v_coupon_discount_amount DECIMAL(10,2) DEFAULT 0;
     DECLARE v_seat_after_box_discount DECIMAL(10,2) DEFAULT 0;
     DECLARE v_fwb_after_concession_discount DECIMAL(10,2) DEFAULT 0;
+    DECLARE v_booking_status VARCHAR(50);
 
     -- Init OUT params
     SET p_base_seat_price     = 0;
@@ -100,12 +101,30 @@ BEGIN
     SET p_membership_tier     = NULL;
     SET p_final_amount        = 0;
 
-    -- 1. Base ticket price: only count 'Held' seats for this booking
+    -- Check booking status first
+    SELECT status INTO v_booking_status
+    FROM booking
+    WHERE id = p_booking_id;
+
+    -- If booking is Cancelled and not paid, return 0
+    IF v_booking_status = 'Cancelled' THEN
+        -- Check if there's a successful payment
+        IF NOT EXISTS (
+            SELECT 1 FROM payment 
+            WHERE booking_id = p_booking_id 
+            AND status = 'Success'
+        ) THEN
+            -- No payment made, total should be 0
+            LEAVE sp_label;
+        END IF;
+    END IF;
+
+    -- 1. Base ticket price: count 'Held' or 'Booked' seats for this booking
     SELECT COALESCE(SUM(price), 0)
     INTO p_base_seat_price
     FROM showtime_seat
     WHERE booking_id = p_booking_id
-      AND status = 'Held';
+      AND status IN ('Held', 'Booked');
 
     -- 2. F&B price
     SELECT COALESCE(SUM(price * quantity), 0)
@@ -905,6 +924,17 @@ CREATE DEFINER="avnadmin"@"%" PROCEDURE "sp_get_customer_bookings"(
     IN p_customer_id INT
 )
 BEGIN
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE v_booking_id BIGINT;
+    DECLARE v_final_amount DECIMAL(10,2);
+    
+    DECLARE cur CURSOR FOR 
+        SELECT DISTINCT b.id 
+        FROM booking b 
+        WHERE b.customer_id = p_customer_id;
+    
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+
     -- Temporary table to store calculated amounts
     DROP TEMPORARY TABLE IF EXISTS temp_booking_amounts;
     CREATE TEMPORARY TABLE temp_booking_amounts (
@@ -913,43 +943,30 @@ BEGIN
     );
 
     -- Calculate final amount for each booking
-    BEGIN
-        DECLARE done INT DEFAULT FALSE;
-        DECLARE v_booking_id BIGINT;
-        DECLARE v_final_amount DECIMAL(10,2);
-        
-        DECLARE cur CURSOR FOR 
-            SELECT DISTINCT b.id 
-            FROM booking b 
-            WHERE b.customer_id = p_customer_id;
-        
-        DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+    OPEN cur;
+    read_loop: LOOP
+        FETCH cur INTO v_booking_id;
+        IF done THEN
+            LEAVE read_loop;
+        END IF;
 
-        OPEN cur;
-        read_loop: LOOP
-            FETCH cur INTO v_booking_id;
-            IF done THEN
-                LEAVE read_loop;
-            END IF;
+        -- Call sp_calculate_final_amount for this booking
+        CALL sp_calculate_final_amount(
+            v_booking_id,
+            @base_seat_price,
+            @fwb_price,
+            @subtotal,
+            @coupon_discount,
+            @coupon_type,
+            @box_office_discount,
+            @concession_discount,
+            @membership_tier,
+            @final_amount
+        );
 
-            -- Call sp_calculate_final_amount for this booking
-            CALL sp_calculate_final_amount(
-                v_booking_id,
-                @base_seat_price,
-                @fwb_price,
-                @subtotal,
-                @coupon_discount,
-                @coupon_type,
-                @box_office_discount,
-                @concession_discount,
-                @membership_tier,
-                @final_amount
-            );
-
-            INSERT INTO temp_booking_amounts VALUES (v_booking_id, @final_amount);
-        END LOOP;
-        CLOSE cur;
-    END;
+        INSERT INTO temp_booking_amounts VALUES (v_booking_id, @final_amount);
+    END LOOP;
+    CLOSE cur;
 
     -- Return booking list with calculated final amounts
     SELECT 
@@ -961,11 +978,11 @@ BEGIN
         CASE 
             WHEN st.date IS NOT NULL AND st.start_time IS NOT NULL 
             THEN CONCAT(st.date, ' ', st.start_time)
-            ELSE ''
+            ELSE 'N/A'
         END as showtime,
-        COALESCE(m.name, 'Unknown Movie') as movieTitle,
+        COALESCE(m.name, 'N/A') as movieTitle,
         m.poster_file as moviePoster,
-        COALESCE(t.name, 'Unknown Theater') as theaterName,
+        COALESCE(t.name, 'N/A') as theaterName,
         COALESCE(st.au_number, 0) as auditoriumNumber,
         -- Get list of seat names (e.g., "A1, A2, A3")
         COALESCE(
@@ -975,21 +992,41 @@ BEGIN
                 AND ss.seat_au_number = s.au_number 
                 AND ss.seat_au_theater_id = s.au_theater_id
              WHERE ss.booking_id = b.id),
-            ''
+            'N/A'
         ) as seatNames,
+        -- Get F&B items as JSON array
+        COALESCE(
+            (SELECT JSON_ARRAYAGG(
+                JSON_OBJECT(
+                    'name', fm.name,
+                    'quantity', ci.quantity,
+                    'price', f.price
+                )
+            )
+             FROM fwb f
+             JOIN contains_item ci ON ci.fwb_id = f.id AND ci.fwb_booking_id = f.booking_id
+             JOIN fwb_menu fm ON fm.id = ci.fwb_menu_id
+             WHERE f.booking_id = b.id),
+            JSON_ARRAY()
+        ) as fwbItems,
         -- Use calculated final amount (after all discounts)
         COALESCE(tba.final_amount, 0) as totalAmount
     FROM booking b
     LEFT JOIN temp_booking_amounts tba ON tba.booking_id = b.id
-    LEFT JOIN showtime_seat ss_first ON ss_first.booking_id = b.id
+    LEFT JOIN (
+        -- Get one showtime_seat per booking to find showtime info
+        SELECT booking_id, st_id, MIN(seat_id) as first_seat_id
+        FROM showtime_seat
+        WHERE booking_id IS NOT NULL
+        GROUP BY booking_id, st_id
+    ) ss_first ON ss_first.booking_id = b.id
     LEFT JOIN showtime st ON ss_first.st_id = st.id
     LEFT JOIN movie m ON st.movie_id = m.id
     -- Join auditorium to get theater_id
     LEFT JOIN auditorium au ON st.au_number = au.number AND st.au_theater_id = au.theater_id
     LEFT JOIN theater t ON au.theater_id = t.id
     WHERE b.customer_id = p_customer_id
-    GROUP BY b.id, b.status, b.created_time_at, b.booking_method, st.date, st.start_time, 
-             m.name, m.poster_file, t.name, st.au_number, au.theater_id, tba.final_amount
+      AND st.id IS NOT NULL  -- Only return bookings with valid showtime info
     ORDER BY b.created_time_at DESC;
 
     -- Cleanup
@@ -1379,6 +1416,11 @@ CREATE DEFINER="avnadmin"@"%" PROCEDURE "sp_get_schedule_by_theater"(
     IN p_date DATE
 )
 BEGIN
+    -- Note: Assumes server/database is in UTC, adjust for GMT+7 (Vietnam timezone)
+    -- Convert NOW() to Vietnam timezone for comparison
+    DECLARE v_current_datetime_vn DATETIME;
+    SET v_current_datetime_vn = CONVERT_TZ(NOW(), '+00:00', '+07:00');
+    
     SELECT
         s.id AS showtime_id,
         s.date,
@@ -1410,6 +1452,10 @@ BEGIN
     WHERE 
         a.theater_id = p_theater_id
         AND s.date = p_date
+        -- Only show showtimes that haven't started yet
+        -- For online booking, must be at least 15 minutes in the future
+        -- Compare with Vietnam timezone (GMT+7)
+        AND TIMESTAMP(s.date, s.start_time) > DATE_ADD(v_current_datetime_vn, INTERVAL 15 MINUTE)
 
     GROUP BY 
         s.id, s.date, s.start_time, s.end_time,
@@ -1939,6 +1985,58 @@ BEGIN
             END IF;
         END IF;
     END IF;
+END$$
+DELIMITER ;
+
+-- Procedure: sp_release_booking
+DROP PROCEDURE IF EXISTS sp_release_booking;
+DELIMITER $$
+CREATE DEFINER="avnadmin"@"%" PROCEDURE "sp_release_booking"(
+    IN p_booking_id BIGINT
+)
+BEGIN
+    DECLARE v_exists INT;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+
+    START TRANSACTION;
+
+    -- Check if booking exists and is Pending
+    SELECT COUNT(*)
+    INTO v_exists
+    FROM booking
+    WHERE id = p_booking_id
+      AND status = 'Pending'
+    FOR UPDATE;
+
+    IF v_exists = 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Booking is not Pending or does not exist';
+    END IF;
+
+    -- Release held seats back to Available
+    UPDATE showtime_seat
+    SET status = 'Available',
+        booking_id = NULL
+    WHERE booking_id = p_booking_id
+      AND status = 'Held';
+
+    -- Delete F&B items associated with this booking
+    DELETE FROM contains_item
+    WHERE fwb_booking_id = p_booking_id;
+
+    DELETE FROM fwb
+    WHERE booking_id = p_booking_id;
+
+    -- Delete the booking record (no cancelled record needed)
+    DELETE FROM booking
+    WHERE id = p_booking_id;
+
+    COMMIT;
 END$$
 DELIMITER ;
 

@@ -1,7 +1,7 @@
 -- ============================================
 -- Functions
 -- Database: bkinema
--- Generated: 2025-11-28T16:54:42.982Z
+-- Generated: 2025-11-29T21:52:09.683Z
 -- ============================================
 
 -- Function: fn_check_email_exists
@@ -13,6 +13,39 @@ BEGIN
     DECLARE email_count INT;
     SELECT COUNT(*) INTO email_count FROM `User` WHERE email = p_email;
     RETURN email_count > 0;
+END$$
+DELIMITER ;
+
+-- Function: fn_count_showtimes_in_range
+DROP FUNCTION IF EXISTS fn_count_showtimes_in_range;
+DELIMITER $$
+CREATE DEFINER="avnadmin"@"%" FUNCTION "fn_count_showtimes_in_range"(
+    p_theater_id INT,
+    p_start_date DATE,
+    p_end_date DATE
+) RETURNS int
+    READS SQL DATA
+BEGIN
+    DECLARE v_total INT DEFAULT 0;
+    DECLARE v_current_date DATE;
+
+    IF p_theater_id IS NULL OR p_theater_id <= 0 THEN RETURN -1; END IF;
+    IF p_start_date IS NULL OR p_end_date IS NULL THEN RETURN -2; END IF;
+    IF p_start_date > p_end_date THEN RETURN -3; END IF;
+
+    SET v_current_date = p_start_date;
+
+    WHILE v_current_date <= p_end_date DO
+        SET v_total = v_total + (
+            SELECT COUNT(*)
+            FROM showtime
+            WHERE au_theater_id = p_theater_id 
+              AND date = v_current_date
+        );
+        SET v_current_date = v_current_date + INTERVAL 1 DAY;
+    END WHILE;
+
+    RETURN v_total;
 END$$
 DELIMITER ;
 

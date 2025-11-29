@@ -46,4 +46,10 @@ export class BookingController {
   async getBookingDetails(@Param('id', ParseIntPipe) id: number) {
     return this.bookingService.getBookingDetails(id);
   }
+
+  @Post('release/:id')
+  @ApiOperation({ summary: 'Release booking seats without cancelling (for going back to change selection)' })
+  async releaseBooking(@Param('id', ParseIntPipe) id: number) {
+    return this.bookingService.releaseBooking(id);
+  }
 }

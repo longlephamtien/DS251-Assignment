@@ -98,7 +98,7 @@ function GiftCardPreview({ card, amount }) {
         <div className="space-y-2">
           <div className="bg-white/20 backdrop-blur-sm rounded px-3 py-1 inline-block">
             <p className="text-xs">Card Value</p>
-            <p className="text-2xl font-bold">{amount.toLocaleString()} VND</p>
+            <p className="text-2xl font-bold">{Math.round(amount).toLocaleString()} VND</p>
           </div>
         </div>
         <div className="flex justify-between items-end">

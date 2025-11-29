@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Barcode from 'react-barcode';
 import Icon from '../components/common/Icon';
 import Notification from '../components/common/Notification';
 import ConfirmDialog from '../components/common/ConfirmDialog';
@@ -604,7 +605,7 @@ const PointTab = () => {
                     <td className={`py-3 px-4 text-right font-semibold ${record.points.toString().startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
                       {record.points}
                     </td>
-                    <td className="py-3 px-4 text-right text-text-main">{record.balance}</td>
+                    <td className="py-3 px-4 text-right text-text-main">₫{Math.round(parseFloat(record.balance || 0)).toLocaleString()}</td>
                   </tr>
                 ))
               ) : (
@@ -645,7 +646,7 @@ const GiftCardTab = () => {
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(Math.round(parseFloat(amount || 0)));
   };
 
   const formatDate = (dateString) => {
@@ -795,17 +796,17 @@ const VoucherTab = () => {
               <h4 className="text-lg font-bold text-text-main mb-2">{coupon.couponType}</h4>
               <p className="text-text-sub text-sm mb-3">
                 {coupon.couponType === 'GiftCard'
-                  ? `Balance: ${(coupon.balance || 0).toLocaleString()} VND`
+                  ? `Balance: ${Math.round(parseFloat(coupon.balance || 0)).toLocaleString()} VND`
                   : coupon.discountType === 'percentage'
                     ? `${coupon.discountValue}% off`
-                    : `${(coupon.discountValue || 0).toLocaleString()} VND off`}
+                    : `${Math.round(parseFloat(coupon.discountValue || 0)).toLocaleString()} VND off`}
               </p>
               <div className="border-t border-dashed border-gray-300 pt-3">
                 <p className="text-xs text-text-sub mb-1">
                   Code: <span className="font-mono font-bold text-text-main">{coupon.couponCode}</span>
                 </p>
                 {coupon.minPurchase && (
-                  <p className="text-xs text-text-sub mb-1">Min: {(coupon.minPurchase || 0).toLocaleString()} VND</p>
+                  <p className="text-xs text-text-sub mb-1">Min: {Math.round(parseFloat(coupon.minPurchase || 0)).toLocaleString()} VND</p>
                 )}
                 <p className="text-xs text-text-sub">
                   Expires: {new Date(coupon.expiryDate).toLocaleDateString()}
@@ -899,7 +900,7 @@ const TransactionHistoryTab = () => {
                       </td>
                       <td className="py-3 px-4 text-text-main">{transaction.description}</td>
                       <td className="py-3 px-4 text-right font-semibold text-text-main">
-                        {transaction.amount.toLocaleString()} VND
+                        {Math.round(parseFloat(transaction.amount)).toLocaleString()} VND
                       </td>
                       <td className="py-3 px-4 text-text-sub">{transaction.paymentMethod}</td>
                       <td className="py-3 px-4 text-center">
@@ -1050,182 +1051,203 @@ const BookingHistoryTab = () => {
 
             return (
               <div key={index} className="bg-white rounded-lg shadow-card overflow-hidden hover:shadow-lg transition-shadow">
-                <div className="flex">
-                  {/* Movie Poster */}
-                  <div className="w-32 h-48 flex-shrink-0 bg-gradient-to-br from-purple-600 via-purple-500 to-purple-700">
-                    <img
-                      src={posterUrl}
-                      alt={booking.movieTitle}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        // Fallback to placeholder with movie title
-                        e.target.style.display = 'none';
-                        const fallback = document.createElement('div');
-                        fallback.className = 'w-full h-full flex items-center justify-center text-white text-center text-sm font-bold px-2';
-                        fallback.textContent = booking.movieTitle || 'MOVIE';
-                        e.target.parentElement.appendChild(fallback);
-                      }}
-                    />
+                <div className="flex flex-col md:flex-row p-4">
+                  {/* Left: Movie Poster + Action Buttons */}
+                  <div className="flex flex-col justify-between md:w-1/5 mb-4 md:mb-0 items-center">
+                    <div className="w-40 h-56 flex-shrink-0 rounded-lg overflow-hidden shadow-lg mb-3">
+                      <img
+                        src={posterUrl}
+                        alt={booking.movieTitle}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          const fallback = document.createElement('div');
+                          fallback.className = 'w-full h-full flex items-center justify-center text-white text-center text-sm font-bold px-2';
+                          fallback.textContent = booking.movieTitle || 'MOVIE';
+                          e.target.parentElement.appendChild(fallback);
+                        }}
+                      />
+                    </div>
+                    
+                    {/* Action Buttons - Will align with bottom row */}
+                    <div className="flex gap-2 w-full mb-2">
+                      {booking.status === 'Paid' && (
+                        <>
+                          <button
+                            onClick={() => setTicketModal({ isOpen: true, booking })}
+                            className="flex-1 bg-primary hover:bg-secondary text-white font-bold py-2 px-2 rounded flex items-center justify-center"
+                          >
+                            <Icon name="ticket" className="mr-1" />
+                            View
+                          </button>
+                          <button
+                            onClick={() => openRefundModal(booking)}
+                            className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-2 rounded flex items-center justify-center"
+                          >
+                            <Icon name="dollar-sign" className="mr-1" />
+                            Refund
+                          </button>
+                        </>
+                      )}
+                      {booking.status === 'Pending' && (
+                        <>
+                          <button
+                            onClick={async () => {
+                              try {
+                                // Call calculate API to get detailed pricing
+                                const response = await fetch(`${require('../config').default.apiUrl}/payment/calculate/${booking.id}`);
+                                const calculation = await response.json();
+
+                                navigate(`/payment/${booking.id}`, {
+                                  state: {
+                                    totalPrice: calculation.finalAmount || booking.totalAmount,
+                                    seatTotal: calculation.baseSeatPrice || booking.totalAmount,
+                                    comboTotal: calculation.fwbPrice || 0,
+                                    bookingInfo: {
+                                      movie: { title: booking.movieTitle },
+                                      showtime: booking.showtime
+                                    },
+                                    calculation // Pass full calculation data
+                                  }
+                                });
+                              } catch (error) {
+                                console.error('Failed to calculate:', error);
+                                // Fallback to basic data
+                                navigate(`/payment/${booking.id}`, {
+                                  state: {
+                                    totalPrice: booking.totalAmount,
+                                    seatTotal: booking.totalAmount,
+                                    bookingInfo: {
+                                      movie: { title: booking.movieTitle },
+                                      showtime: booking.showtime
+                                    }
+                                  }
+                                });
+                              }
+                            }}
+                            className="flex-1 bg-accent hover:bg-accent/90 text-white font-bold py-2 px-2 rounded flex items-center justify-center"
+                          >
+                            <Icon name="credit-card" className="mr-1" />
+                            Pay
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setConfirmDialog({
+                                isOpen: true,
+                                title: 'Cancel Booking',
+                                message: 'Are you sure you want to cancel this booking?',
+                                onConfirm: async () => {
+                                  try {
+                                    const response = await fetch(`${require('../config').default.apiUrl}/payment/cancel`, {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        bookingId: parseInt(booking.id),
+                                        reason: 'User cancelled from My Bookings'
+                                      })
+                                    });
+
+                                    if (!response.ok) {
+                                      const error = await response.json();
+                                      throw new Error(error.message || 'Failed to cancel booking');
+                                    }
+
+                                    setNotification({
+                                      isOpen: true,
+                                      title: 'Success',
+                                      message: 'Booking cancelled successfully',
+                                      type: 'success'
+                                    });
+                                    // Refresh bookings after short delay
+                                    setTimeout(() => window.location.reload(), 1500);
+                                  } catch (error) {
+                                    console.error('Failed to cancel:', error);
+                                    setNotification({
+                                      isOpen: true,
+                                      title: 'Error',
+                                      message: `Failed to cancel booking: ${error.message}`,
+                                      type: 'error'
+                                    });
+                                  }
+                                }
+                              });
+                            }}
+                            className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-2 rounded flex items-center justify-center"
+                          >
+                            <Icon name="x" className="mr-1" />
+                            Cancel
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Booking Details */}
-                  <div className="flex-1 p-6">
-                    <div className="flex justify-between items-start mb-4">
+                  {/* Right: Booking Details - Full Height */}
+                  <div className="flex-1 md:pl-6 flex flex-col">
+                    <div className="flex justify-between items-start mb-2">
                       <div>
-                        <p className="text-sm text-text-sub mb-1">Booking ID</p>
-                        <p className="font-mono font-bold text-text-main text-lg">#{booking.id}</p>
+                        <p className="text-sm text-gray-600 mb-1">Booking ID</p>
+                        <p className="font-bold text-gray-900">#{booking.id}</p>
                       </div>
-                      <span className={`px-4 py-2 rounded-full text-sm font-semibold ${booking.status === 'Paid' ? 'bg-green-100 text-green-700' :
+                      <span className={`px-4 py-1 rounded-full text-sm font-semibold ${
+                        booking.status === 'Paid' ? 'bg-green-100 text-green-700' :
                         booking.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' :
-                          booking.status === 'Cancelled' ? 'bg-red-100 text-red-700' :
-                            'bg-gray-100 text-gray-700'
-                        }`}>
+                        booking.status === 'Cancelled' ? 'bg-red-100 text-red-700' :
+                        'bg-gray-100 text-gray-700'
+                      }`}>
                         {booking.status}
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                    {/* Booking Information */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 flex-1">
                       <div>
-                        <p className="text-sm text-text-sub mb-1">Movie</p>
-                        <p className="font-semibold text-text-main">{booking.movieTitle || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-text-sub mb-1">Showtime</p>
-                        <p className="text-text-main">{booking.showtime || 'N/A'}</p>
+                        <p className="text-sm text-gray-600 mb-1">Movie</p>
+                        <p className="font-semibold text-gray-900">{booking.movieTitle || 'N/A'}</p>
                       </div>
                       <div>
-                        <p className="text-sm text-text-sub mb-1">Theater</p>
-                        <p className="font-semibold text-text-main">{booking.theaterName || 'N/A'}</p>
+                        <p className="text-sm text-gray-600 mb-1">Showtime</p>
+                        <p className="font-semibold text-gray-900">{booking.showtime || 'N/A'}</p>
                       </div>
                       <div>
-                        <p className="text-sm text-text-sub mb-1">Auditorium</p>
-                        <p className="font-semibold text-text-main">Auditorium {booking.auditoriumNumber || 'N/A'}</p>
+                        <p className="text-sm text-gray-600 mb-1">Theater</p>
+                        <p className="font-semibold text-gray-900">{booking.theaterName || 'N/A'}</p>
                       </div>
                       <div>
-                        <p className="text-sm text-text-sub mb-1">Seats</p>
-                        <p className="font-semibold text-primary">{booking.seatNames || 'N/A'}</p>
+                        <p className="text-sm text-gray-600 mb-1">Auditorium</p>
+                        <p className="font-semibold text-gray-900">Auditorium {booking.auditoriumNumber || 'N/A'}</p>
                       </div>
-                      <div className="md:col-span-2 lg:col-span-3">
-                        <p className="text-sm text-text-sub mb-1">Total Amount</p>
-                        <p className="font-bold text-accent text-lg">{(booking.totalAmount || 0).toLocaleString()} VND</p>
+                      <div>
+                        <p className="text-sm text-gray-600 mb-1">Seats</p>
+                        <p className="font-semibold text-gray-900">{booking.seatNames || 'N/A'}</p>
                       </div>
+                      {booking.fwbItems && Array.isArray(booking.fwbItems) && booking.fwbItems.length > 0 && (
+                        <div>
+                          <p className="text-sm text-gray-600 mb-1">Food & Beverage</p>
+                          <p className="font-semibold text-gray-900">
+                            {booking.fwbItems.map((item, idx) => (
+                              <div key={idx}>
+                                <span>
+                                  {item.name} x{item.quantity}
+                                </span>
+                              </div>
+                            ))}
+                          </p>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                      <div className="text-sm text-text-sub">
-                        {/* <Icon name="clock" className="inline mr-1" /> */}
-                        Booked: {booking.createdAt}
+                    {/* Booking Time and Total Amount */}
+                    <div className="mt-4 flex justify-between items-center border-t border-gray-200 pt-3">
+                      <div>
+                        <p className="text-sm text-gray-600 mb-1">Booking Time</p>
+                        <p className="font-semibold text-gray-900">{booking.createdAt}</p>
                       </div>
-                      <div className="flex gap-2">
-                        {booking.status === 'Paid' && (
-                          <>
-                            <button
-                              onClick={() => setTicketModal({ isOpen: true, booking })}
-                              className="bg-primary hover:bg-secondary text-white font-bold py-2 px-6 rounded flex items-center"
-                            >
-                              <Icon name="ticket" className="mr-2" />
-                              View Ticket
-                            </button>
-                            <button
-                              onClick={() => openRefundModal(booking)}
-                              className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded flex items-center"
-                            >
-                              <Icon name="dollar-sign" className="mr-2" />
-                              Request Refund
-                            </button>
-                          </>
-                        )}
-                        {booking.status === 'Pending' && (
-                          <>
-                            <button
-                              onClick={async () => {
-                                try {
-                                  // Call calculate API to get detailed pricing
-                                  const response = await fetch(`${require('../config').default.apiUrl}/payment/calculate/${booking.id}`);
-                                  const calculation = await response.json();
-
-                                  navigate(`/payment/${booking.id}`, {
-                                    state: {
-                                      totalPrice: calculation.finalAmount || booking.totalAmount,
-                                      seatTotal: calculation.baseSeatPrice || booking.totalAmount,
-                                      comboTotal: calculation.fwbPrice || 0,
-                                      bookingInfo: {
-                                        movie: { title: booking.movieTitle },
-                                        showtime: booking.showtime
-                                      },
-                                      calculation // Pass full calculation data
-                                    }
-                                  });
-                                } catch (error) {
-                                  console.error('Failed to calculate:', error);
-                                  // Fallback to basic data
-                                  navigate(`/payment/${booking.id}`, {
-                                    state: {
-                                      totalPrice: booking.totalAmount,
-                                      seatTotal: booking.totalAmount,
-                                      bookingInfo: {
-                                        movie: { title: booking.movieTitle },
-                                        showtime: booking.showtime
-                                      }
-                                    }
-                                  });
-                                }
-                              }}
-                              className="bg-accent hover:bg-accent/90 text-white font-bold py-2 px-8 rounded flex items-center"
-                            >
-                              <Icon name="credit-card" className="mr-2" />
-                              Pay Now
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                setConfirmDialog({
-                                  isOpen: true,
-                                  title: 'Cancel Booking',
-                                  message: 'Are you sure you want to cancel this booking?',
-                                  onConfirm: async () => {
-                                    try {
-                                      const response = await fetch(`${require('../config').default.apiUrl}/payment/cancel`, {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({
-                                          bookingId: parseInt(booking.id),
-                                          reason: 'User cancelled from My Bookings'
-                                        })
-                                      });
-
-                                      if (!response.ok) {
-                                        const error = await response.json();
-                                        throw new Error(error.message || 'Failed to cancel booking');
-                                      }
-
-                                      setNotification({
-                                        isOpen: true,
-                                        title: 'Success',
-                                        message: 'Booking cancelled successfully',
-                                        type: 'success'
-                                      });
-                                      // Refresh bookings after short delay
-                                      setTimeout(() => window.location.reload(), 1500);
-                                    } catch (error) {
-                                      console.error('Failed to cancel:', error);
-                                      setNotification({
-                                        isOpen: true,
-                                        title: 'Error',
-                                        message: `Failed to cancel booking: ${error.message}`,
-                                        type: 'error'
-                                      });
-                                    }
-                                  }
-                                });
-                              }}
-                              className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded flex items-center"
-                            >
-                              <Icon name="x" className="mr-2" />
-                              Cancel
-                            </button>
-                          </>
-                        )}
+                      
+                      <div className="text-right">
+                        <p className="text-sm text-gray-600 mb-1">Total Amount</p>
+                        <p className="text-xl font-bold text-primary">₫{Math.round(parseFloat(booking.totalAmount || 0)).toLocaleString()}</p>
                       </div>
                     </div>
                   </div>
@@ -1238,90 +1260,112 @@ const BookingHistoryTab = () => {
 
       {/* Ticket Modal */}
       {ticketModal.isOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full overflow-hidden">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 !mt-0">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full overflow-hidden">
             {/* Header with movie poster */}
-            <div className="bg-gradient-to-r from-primary to-secondary p-6 text-white">
+            <div className="bg-primary p-6 text-white">
               <div className="flex items-center gap-4">
-                <div className="w-16 h-24 bg-white/20 rounded overflow-hidden flex-shrink-0">
+                <div className="w-20 h-28 bg-white/20 rounded overflow-hidden flex-shrink-0 shadow-lg">
                   <img
-                    src={resolvePoster(ticketModal.booking?.moviePoster) || `https://via.placeholder.com/64x96/FFFFFF/6B46C1?text=Movie`}
+                    src={resolvePoster(ticketModal.booking?.moviePoster) || `https://via.placeholder.com/80x112/FFFFFF/6B46C1?text=Movie`}
                     alt={ticketModal.booking?.movieTitle}
                     className="w-full h-full object-cover"
                   />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-2xl font-bold mb-1">{ticketModal.booking?.movieTitle || 'Movie Title'}</h3>
-                  <p className="text-sm opacity-90">{ticketModal.booking?.theaterName || 'BKinema Cinema'}</p>
+                  <h3 className="text-3xl font-bold mb-2">{ticketModal.booking?.movieTitle || 'Movie Title'}</h3>
+                  <p className="text-lg opacity-90 mb-1">{ticketModal.booking?.theaterName || 'BKinema Cinema'}</p>
                 </div>
               </div>
             </div>
 
             {/* Ticket Details */}
-            <div className="p-6 bg-pink-50">
-              <div className="bg-white rounded-lg p-6 mb-4">
-                <div className="text-center mb-6">
-                  <p className="text-sm text-gray-600 mb-2">Booking Code</p>
-                  <p className="text-3xl font-bold text-primary font-mono tracking-wider">
-                    {String(ticketModal.booking?.id || '').padStart(10, '0')}
-                  </p>
-                </div>
-
-                {/* Barcode */}
-                <div className="bg-white border-2 border-dashed border-gray-300 rounded-lg p-4 mb-6">
+            <div className="p-6 bg-gray-50">
+              {/* Booking Code & Barcode Section */}
+              <div className="bg-white rounded-lg p-6 mb-6 shadow-sm border border-gray-200">
+                <div className="flex flex-col items-center">
+                  {/* Barcode */}
+                  <div className="bg-white p-4 rounded-lg mb-4">
+                    <Barcode 
+                      value={String(ticketModal.booking?.id || '0000000000').padStart(10, '0')}
+                      width={2}
+                      height={80}
+                      displayValue={false}
+                      margin={0}
+                    />
+                  </div>
+                  
+                  {/* Booking Code */}
                   <div className="text-center">
-                    <svg className="mx-auto mb-2" width="250" height="80" viewBox="0 0 250 80">
-                      {/* Generate barcode pattern */}
-                      {Array.from({ length: 50 }).map((_, i) => (
-                        <rect
-                          key={i}
-                          x={i * 5}
-                          y="10"
-                          width={Math.random() > 0.5 ? 2 : 1}
-                          height="60"
-                          fill="black"
-                        />
-                      ))}
-                    </svg>
-                    <p className="font-mono text-xs text-gray-500">*{String(ticketModal.booking?.id || '').padStart(10, '0')}*</p>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Booking Code</p>
+                    <p className="text-2xl font-bold text-gray-900 font-mono tracking-wider">
+                      {String(ticketModal.booking?.id || '').padStart(10, '0')}
+                    </p>
                   </div>
                 </div>
+              </div>
 
-                {/* Ticket Information */}
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-gray-500 mb-1">Showtime</p>
-                    <p className="font-bold text-pink-600">{ticketModal.booking?.showtime || 'N/A'}</p>
+              {/* Ticket Information Grid */}
+              <div className="bg-white rounded-lg p-6 mb-6 shadow-md">
+                <h4 className="text-lg font-bold text-primary mb-4 border-b-2 border-primary pb-2">Ticket Details</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2 md:col-span-1">
+                    <p className="text-sm text-gray-600 mb-1">Auditorium</p>
+                    <p className="font-bold text-gray-900">Auditorium {ticketModal.booking?.auditoriumNumber || 'N/A'}</p>
                   </div>
-                  <div>
-                    <p className="text-gray-500 mb-1">Auditorium</p>
-                    <p className="font-bold">Auditorium {ticketModal.booking?.auditoriumNumber || 'N/A'}</p>
+                  <div className="col-span-2 md:col-span-1">
+                    <p className="text-sm text-gray-600 mb-1">Showtime</p>
+                    <p className="font-bold text-gray-900">{ticketModal.booking?.showtime || 'N/A'}</p>
                   </div>
-                  <div>
-                    <p className="text-gray-500 mb-1">Seats</p>
-                    <p className="font-bold">{ticketModal.booking?.seatNames || 'N/A'}</p>
+                  <div className="col-span-2 md:col-span-1">
+                    <p className="text-sm text-gray-600 mb-1">Seats</p>
+                    <p className="font-bold text-gray-900">{ticketModal.booking?.seatNames || 'N/A'}</p>
                   </div>
-                  <div>
-                    <p className="text-gray-500 mb-1">Total</p>
-                    <p className="font-bold text-pink-600">{(ticketModal.booking?.totalAmount || 0).toLocaleString()} VND</p>
+                  
+                  {/* Food & Beverage if exists */}
+                  {ticketModal.booking?.fwbItems && Array.isArray(ticketModal.booking.fwbItems) && ticketModal.booking.fwbItems.length > 0 && (
+                    <div className="col-span-2 md:col-span-1">
+                      <p className="text-sm text-gray-600 mb-1">Food & Beverage</p>
+                        {ticketModal.booking.fwbItems.map((item, idx) => (
+                          <div key={idx} className="flex justify-between items-center">
+                            <span className="font-semibold text-gray-900">{item.name} x{item.quantity}</span>
+                          </div>
+                        ))}
+                      </div>
+                  )}
+
+                  {/* Total Amount */}
+                  <div className="col-span-2 mt-4 pt-4 border-t-2 border-dashed border-gray-300">
+                    <div className="flex justify-between items-center">
+                      <p className="text-lg font-semibold text-gray-600">Total Amount</p>
+                      <p className="text-2xl font-bold text-primary">₫{Math.round(parseFloat(ticketModal.booking?.totalAmount || 0)).toLocaleString()}</p>
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Instructions */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                <p className="text-sm text-blue-900">
-                  <Icon name="info" className="inline mr-1" />
-                  Show this barcode at the cinema counter to collect your tickets
-                </p>
+              <div className="bg-blue-50 border-blue-500 rounded-lg p-4 mb-4">
+                <div className="flex items-start gap-3">
+                  <Icon name="info" className="text-blue-600 text-xl mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-semibold text-blue-900 mb-1">Important Instruction</p>
+                    <p className="text-sm text-blue-800">
+                      Please show this barcode at the cinema counter to collect your physical tickets. 
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              <button
-                onClick={() => setTicketModal({ isOpen: false, booking: null })}
-                className="w-full bg-primary hover:bg-secondary text-white font-bold py-3 px-6 rounded"
-              >
-                Close
-              </button>
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setTicketModal({ isOpen: false, booking: null })}
+                  className="w-full bg-gray-800 hover:bg-gray-800/90 text-white font-bold py-3 px-6 rounded"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1329,48 +1373,65 @@ const BookingHistoryTab = () => {
 
       {/* Refund Modal */}
       {refundModal.isOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 className="text-2xl font-bold text-primary mb-4">Request Refund</h3>
-
-            <div className="mb-4 bg-gray-50 p-4 rounded">
-              <p className="text-sm text-text-sub mb-1">Booking ID</p>
-              <p className="font-mono font-bold text-text-main">#{refundModal.booking?.id}</p>
-              <p className="text-sm text-text-sub mt-2 mb-1">Refund Amount</p>
-              <p className="font-bold text-accent text-xl">{refundForm.amount.toLocaleString()} VND</p>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 !mt-0">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full overflow-hidden">
+            {/* Header */}
+            <div className="bg-primary p-6 text-white">
+              <div className="flex items-center gap-3">
+                <Icon name="refund" className="text-4xl" />
+                <div className="flex-1">
+                  <h3 className="text-3xl font-bold mb-1">Request Refund</h3>
+                  <p className="text-lg opacity-90">Booking #{refundModal.booking?.id}</p>
+                </div>
+              </div>
             </div>
 
-            <div className="mb-4">
-              <label className="block text-text-main font-semibold mb-2">Reason for Refund *</label>
-              <textarea
-                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-primary focus:border-transparent"
-                rows="4"
-                placeholder="Please explain why you want to refund this booking..."
-                value={refundForm.reason}
-                onChange={(e) => setRefundForm({ ...refundForm, reason: e.target.value })}
-              />
-            </div>
+            {/* Content */}
+            <div className="p-6 bg-gray-50">
+              {/* Refund Amount Card */}
+              <div className="bg-white rounded-lg p-6 mb-6 shadow-md border border-gray-200">
+                <div className="flex justify-between items-center mb-4 pb-4 border-b-2 border-dashed border-gray-300">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Refund Amount</p>
+                    <p className="text-3xl font-bold text-primary">₫{Math.round(parseFloat(refundForm.amount)).toLocaleString()}</p>
+                  </div>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <p className="text-sm text-blue-900">
+                      A coupon will be created with the refund amount and sent to your account.
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-              <p className="text-sm text-blue-900">
-                <Icon name="info" className="inline mr-1" />
-                A compensation coupon will be created with the refund amount.
-              </p>
-            </div>
+              {/* Reason Section */}
+              <div className="bg-white rounded-lg p-6 mb-6 shadow-md">
+                <label className="block text-lg font-bold text-primary mb-3">Reason for Refund *</label>
+                <textarea
+                  className="w-full border-2 border-gray-300 rounded-lg p-4 focus:ring-2 focus:ring-primary focus:border-primary transition-all text-gray-900"
+                  rows="5"
+                  placeholder="Please explain why you want to refund this booking..."
+                  value={refundForm.reason}
+                  onChange={(e) => setRefundForm({ ...refundForm, reason: e.target.value })}
+                />
+              </div>
 
-            <div className="flex gap-3">
-              <button
-                onClick={closeRefundModal}
-                className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-3 px-6 rounded"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleRefundSubmit}
-                className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded"
-              >
-                Submit Refund
-              </button>
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={closeRefundModal}
+                  className="flex-1 bg-gray-800 hover:bg-gray-800/90 text-white font-bold py-3 px-6 rounded transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRefundSubmit}
+                  className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded transition-colors flex items-center justify-center gap-2"
+                >
+                  Submit Refund
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1521,7 +1582,7 @@ const RefundTab = () => {
                 <option value="">-- Choose a booking --</option>
                 {bookings.map((booking) => (
                   <option key={booking.id} value={booking.id}>
-                    Booking #{booking.id} - {booking.movieTitle} - {booking.showtime} - {parseFloat(booking.totalAmount).toLocaleString()} VND
+                    Booking #{booking.id} - {booking.movieTitle} - {booking.showtime} - {Math.round(parseFloat(booking.totalAmount)).toLocaleString()} VND
                   </option>
                 ))}
               </select>
@@ -1546,7 +1607,7 @@ const RefundTab = () => {
                   </div>
                   <div>
                     <span className="text-blue-700">Refund Amount:</span>
-                    <span className="font-bold text-accent ml-2">{parseFloat(selectedBooking.totalAmount).toLocaleString()} VND</span>
+                    <span className="font-bold text-accent ml-2">{Math.round(parseFloat(selectedBooking.totalAmount)).toLocaleString()} VND</span>
                   </div>
                 </div>
               </div>
@@ -1611,7 +1672,7 @@ const RefundTab = () => {
                   </div>
                   <div>
                     <p className="text-sm text-text-sub mb-1">Refund Amount</p>
-                    <p className="font-bold text-accent text-lg">{parseFloat(refund.refundAmount).toLocaleString()} VND</p>
+                    <p className="font-bold text-accent text-lg">{Math.round(parseFloat(refund.refundAmount)).toLocaleString()} VND</p>
                   </div>
                   <div>
                     <p className="text-sm text-text-sub mb-1">Refunded At</p>
@@ -1636,7 +1697,7 @@ const RefundTab = () => {
                           </div>
                           <div>
                             <span className="text-blue-700">Balance:</span>
-                            <span className="font-bold text-blue-900 ml-2">{parseFloat(refund.couponBalance).toLocaleString()} VND</span>
+                            <span className="font-bold text-blue-900 ml-2">{Math.round(parseFloat(refund.couponBalance)).toLocaleString()} VND</span>
                           </div>
                           <div className="col-span-2">
                             <span className="text-blue-700">Expires:</span>

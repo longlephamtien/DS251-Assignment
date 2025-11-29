@@ -99,6 +99,23 @@ export default function BookingPage() {
               return `${hours}:${minutes}`;
             };
 
+            // Check if showtime crosses midnight
+            const startTime = formatTime(showtimeData.start_time);
+            const endTime = formatTime(showtimeData.end_time);
+            const [startHour, startMin] = startTime.split(':').map(Number);
+            const [endHour, endMin] = endTime.split(':').map(Number);
+            const startMinutes = startHour * 60 + startMin;
+            const endMinutes = endHour * 60 + endMin;
+            const crossesMidnight = endMinutes < startMinutes;
+
+            // Calculate end date if crosses midnight
+            let endDate = formattedDate;
+            if (crossesMidnight) {
+              const endDateObj = new Date(dateObj);
+              endDateObj.setDate(endDateObj.getDate() + 1);
+              endDate = `${endDateObj.getDate().toString().padStart(2, '0')}/${(endDateObj.getMonth() + 1).toString().padStart(2, '0')}/${endDateObj.getFullYear()}`;
+            }
+
             setBookingInfo(prev => ({
               ...prev,
               theater: theaterData.name,
@@ -107,9 +124,11 @@ export default function BookingPage() {
                 current: auditoriumData.capacity,
                 total: auditoriumData.capacity
               },
-              showtime: formatTime(showtimeData.start_time),
+              showtime: startTime,
               date: formattedDate,
-              endTime: formatTime(showtimeData.end_time),
+              endTime: endTime,
+              endDate: endDate,
+              crossesMidnight: crossesMidnight,
               movie: {
                 ...prev.movie,
                 title: movieData.name,
@@ -582,7 +601,7 @@ export default function BookingPage() {
                       {bookingInfo.theater} | {bookingInfo.cinema} | Remaining ({bookingInfo.remaining.current}/{bookingInfo.remaining.total})
                     </h2>
                     <p className="text-sm text-gray-700">
-                      {bookingInfo.date} {bookingInfo.showtime} ~ {bookingInfo.date} {bookingInfo.endTime}
+                      {bookingInfo.date} {bookingInfo.showtime} ~ {bookingInfo.crossesMidnight ? bookingInfo.endDate : bookingInfo.date} {bookingInfo.endTime}
                     </p>
                   </>
                 )}
@@ -817,7 +836,9 @@ export default function BookingPage() {
                   <p className="text-sm text-gray-300">Theater</p>
                   <p className="font-bold">{bookingInfo.theater || 'Loading...'}</p>
                   <p className="text-sm text-gray-300">Showtimes</p>
-                  <p className="font-bold">{bookingInfo.showtime || '-'}, {bookingInfo.date || '-'}</p>
+                  <p className="font-bold">
+                    {bookingInfo.showtime || '-'}, {bookingInfo.date || '-'}
+                  </p>
                   <p className="text-sm text-gray-300">Screen</p>
                   <p className="font-bold">{bookingInfo.movie.screen || '-'}</p>
                 </div>
@@ -825,11 +846,11 @@ export default function BookingPage() {
                 {/* Pricing */}
                 <div className="text-right min-w-[150px]">
                   <p className="text-sm text-gray-300">Movie</p>
-                  <p className="font-bold">₫{total.toFixed(2)}</p>
+                  <p className="font-bold">₫{Math.round(total).toLocaleString()}</p>
                   <p className="text-sm text-gray-300">Combo</p>
-                  <p className="font-bold">₫{movieCombo.toFixed(2)}</p>
+                  <p className="font-bold">₫{Math.round(movieCombo).toLocaleString()}</p>
                   <p className="text-sm text-gray-300 mt-2">Total</p>
-                  <p className="font-bold text-xl text-yellow-400">₫{(total + movieCombo).toFixed(2)}</p>
+                  <p className="font-bold text-xl text-yellow-400">₫{Math.round(total + movieCombo).toLocaleString()}</p>
                 </div>
 
                 {/* Next Button */}

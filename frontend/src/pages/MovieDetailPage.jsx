@@ -381,6 +381,38 @@ function BookingModal({ movie, dates, onClose }) {
     fetchTheaters();
   }, [selectedCity]);
 
+  // Helper function to format showtime display with date handling
+  const formatShowtimeDisplay = (startTime, endTime, showtimeDate) => {
+    const start = startTime.substring(0, 5);
+    const end = endTime.substring(0, 5);
+    
+    const [startHour, startMin] = start.split(':').map(Number);
+    const [endHour, endMin] = end.split(':').map(Number);
+    
+    const startMinutes = startHour * 60 + startMin;
+    const endMinutes = endHour * 60 + endMin;
+    
+    if (endMinutes < startMinutes) {
+      const date = new Date(showtimeDate);
+      date.setDate(date.getDate() + 1);
+      const nextDay = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return {
+        start,
+        end,
+        display: `${start} - ${end} (+1)`,
+        endDate: nextDay,
+        crossesMidnight: true
+      };
+    }
+    
+    return {
+      start,
+      end,
+      display: `${start} - ${end}`,
+      crossesMidnight: false
+    };
+  };
+
   // Fetch schedules for all theaters when date changes
   useEffect(() => {
     const fetchSchedules = async () => {
@@ -395,7 +427,16 @@ function BookingModal({ movie, dates, onClose }) {
             // Filter schedule to only include showtimes for the current movie
             const filteredSchedule = schedule ? schedule.filter(showtime =>
               String(showtime.movie_id) === String(movie.id)
-            ) : [];
+            ).map(showtime => {
+              // Add formatted time display
+              const timeInfo = formatShowtimeDisplay(showtime.start_time, showtime.end_time, showtime.date);
+              return {
+                ...showtime,
+                time_display: timeInfo.display,
+                crosses_midnight: timeInfo.crossesMidnight,
+                end_date: timeInfo.endDate
+              };
+            }) : [];
             return { theaterId: theater.id, schedule: filteredSchedule };
           } catch (err) {
             console.error(`Error fetching schedule for theater ${theater.id}:`, err);
@@ -582,7 +623,7 @@ function BookingModal({ movie, dates, onClose }) {
                                       key={showtime.showtime_id}
                                       onClick={() => handleShowtimeClick(theater.id, showtime.showtime_id)}
                                       className="px-4 py-2 text-sm border border-gray-300 hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-colors font-medium"
-                                      title={`${showtime.start_time} - ${showtime.end_time} | Auditorium ${showtime.auditorium_number}`}
+                                      title={`${showtime.time_display || showtime.start_time + ' - ' + showtime.end_time} | Auditorium ${showtime.auditorium_number}`}
                                     >
                                       {showtime.start_time.substring(0, 5)}
                                     </button>

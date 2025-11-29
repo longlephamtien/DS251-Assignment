@@ -130,6 +130,31 @@ class BookingService {
       throw error;
     }
   }
+
+  /**
+   * Release booking (remove held seats without creating cancelled record)
+   * Used when user goes back to change selection
+   */
+  async releaseBooking(bookingId) {
+    try {
+      const response = await fetch(`${config.apiUrl}/booking/release/${bookingId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to release booking');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error releasing booking:', error);
+      throw error;
+    }
+  }
 }
 
 export const bookingService = new BookingService();

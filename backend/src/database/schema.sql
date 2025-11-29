@@ -1,7 +1,7 @@
 -- ============================================
 -- Database Schema (Table Structures)
 -- Database: bkinema
--- Generated: 2025-11-28T16:54:39.978Z
+-- Generated: 2025-11-29T21:52:05.553Z
 -- ============================================
 -- This file contains CREATE TABLE statements for all tables
 -- ============================================
