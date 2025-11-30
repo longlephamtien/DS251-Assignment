@@ -21,6 +21,7 @@ export class PaymentService {
     couponType?: string;
     boxOfficeDiscount: number;
     concessionDiscount: number;
+    pointsDiscount: number;
     membershipTier?: string;
     finalAmount: number;
   }> {
@@ -35,6 +36,7 @@ export class PaymentService {
           @p_coupon_type,
           @p_box_office_discount,
           @p_concession_discount,
+          @p_points_discount,
           @p_membership_tier,
           @p_final_amount
         )`,
@@ -51,6 +53,7 @@ export class PaymentService {
           @p_coupon_type as couponType,
           @p_box_office_discount as boxOfficeDiscount,
           @p_concession_discount as concessionDiscount,
+          @p_points_discount as pointsDiscount,
           @p_membership_tier as membershipTier,
           @p_final_amount as finalAmount
         `
@@ -64,6 +67,7 @@ export class PaymentService {
         couponType: result.couponType || undefined,
         boxOfficeDiscount: parseFloat(result.boxOfficeDiscount || 0),
         concessionDiscount: parseFloat(result.concessionDiscount || 0),
+        pointsDiscount: parseFloat(result.pointsDiscount || 0),
         membershipTier: result.membershipTier || undefined,
         finalAmount: parseFloat(result.finalAmount || 0),
       };

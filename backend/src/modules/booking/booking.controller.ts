@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Get, Param, UseGuards, Request, ParseIntPipe } from '@nestjs/common';
+import { Body, Controller, Post, Get, Param, UseGuards, Request, ParseIntPipe, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { BookingService } from './booking.service';
 import { BookingTimeoutService } from './booking-timeout.service';
@@ -30,9 +30,15 @@ export class BookingController {
 
   @Get('my-bookings')
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Get all bookings for logged-in customer' })
-  async getMyBookings(@Request() req) {
-    return this.bookingService.getMyBookings(req.user.userId);
+  @ApiOperation({ summary: 'Get all bookings for logged-in customer with pagination' })
+  async getMyBookings(
+    @Request() req,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const parsedLimit = limit ? parseInt(limit) : 5;
+    const parsedOffset = offset ? parseInt(offset) : 0;
+    return this.bookingService.getMyBookings(req.user.userId, parsedLimit, parsedOffset);
   }
 
   @Get('cleanup-expired')

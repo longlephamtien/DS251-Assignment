@@ -1,8 +1,31 @@
 -- ============================================
 -- Functions
 -- Database: bkinema
--- Generated: 2025-11-29T21:52:09.683Z
+-- Generated: 2025-11-30T09:44:38.566Z
 -- ============================================
+
+-- Function: fn_calculate_points
+DROP FUNCTION IF EXISTS fn_calculate_points;
+DELIMITER $$
+CREATE DEFINER="avnadmin"@"%" FUNCTION "fn_calculate_points"(
+    p_amount DECIMAL(10,2),
+    p_rate DECIMAL(5,2)
+) RETURNS int
+    DETERMINISTIC
+BEGIN
+    DECLARE v_raw_points DECIMAL(10,2);
+    DECLARE v_points INT;
+    
+    -- Calculate raw points: amount * rate / 1000
+    SET v_raw_points = (p_amount * p_rate / 100) / 1000;
+    
+    -- Apply rounding rules
+    -- Round to nearest integer (0.5 rounds up, 0.1-0.4 rounds down)
+    SET v_points = ROUND(v_raw_points, 0);
+    
+    RETURN v_points;
+END$$
+DELIMITER ;
 
 -- Function: fn_check_email_exists
 DROP FUNCTION IF EXISTS fn_check_email_exists;
@@ -56,20 +79,8 @@ CREATE DEFINER="avnadmin"@"%" FUNCTION "fn_get_default_membership"() RETURNS var
     READS SQL DATA
     DETERMINISTIC
 BEGIN
-    DECLARE default_membership VARCHAR(50) CHARSET utf8mb4 COLLATE utf8mb4_unicode_ci;
-    
-    -- Get membership tier with minimum points requirement
-    SELECT tier_name INTO default_membership
-    FROM membership
-    ORDER BY uk_membership_min_point ASC
-    LIMIT 1;
-    
-    -- Fallback to 'Member' if no membership tiers exist
-    IF default_membership IS NULL THEN
-        SET default_membership = 'Member';
-    END IF;
-    
-    RETURN default_membership;
+    -- Always return 'Member' as default
+    RETURN 'Member';
 END$$
 DELIMITER ;
 
@@ -80,21 +91,9 @@ CREATE DEFINER="avnadmin"@"%" FUNCTION "fn_get_membership_by_points"(p_points IN
     READS SQL DATA
     DETERMINISTIC
 BEGIN
-    DECLARE membership_tier VARCHAR(50) CHARSET utf8mb4 COLLATE utf8mb4_unicode_ci;
-    
-    -- Get the highest tier that user qualifies for
-    SELECT tier_name INTO membership_tier
-    FROM membership
-    WHERE uk_membership_min_point <= p_points
-    ORDER BY uk_membership_min_point DESC
-    LIMIT 1;
-    
-    -- If no tier found, return default membership
-    IF membership_tier IS NULL THEN
-        SET membership_tier = fn_get_default_membership();
-    END IF;
-    
-    RETURN membership_tier;
+    -- This function is deprecated, membership is now based on total_spent
+    -- Return 'Member' as default
+    RETURN 'Member';
 END$$
 DELIMITER ;
 

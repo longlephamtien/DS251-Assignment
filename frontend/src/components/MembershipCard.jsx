@@ -6,64 +6,61 @@ const MembershipCard = ({ cardData }) => {
         return null;
     }
 
-    const { memberName, cardNumber, tierName, accumulatedPoints, expiryDate } = cardData;
+    console.log('cardData:', cardData);
 
-    // Tier-based gradient colors
+    const { memberName, cardNumber, tierName, expiryDate } = cardData;
+
+    // Tier-based gradient colors (following theme convention)
+    // primary: #3333A6, secondary: #5858F5, accent: #FF8C00
     const getTierGradient = (tier) => {
         const tierLower = tier?.toLowerCase();
         switch (tierLower) {
             case 'vvip':
-                return 'from-indigo-600 via-purple-500 to-orange-400';
+                // VVIP: Accent gradient (orange theme)
+                return 'from-secondary to-purple-700';
             case 'vip':
-                return 'from-indigo-600 via-purple-500 to-orange-400';
+                // VIP: Secondary gradient (light purple/blue theme)
+                return 'from-accent to-orange-600';
             case 'u22':
-                return 'from-blue-600 via-cyan-500 to-teal-400';
             case 'member':
             default:
-                return 'from-blue-600 via-indigo-600 to-purple-500';
+                // Member/U22: Primary gradient (dark blue theme)
+                return 'from-blue-400 to-blue-600';
         }
     };
 
-    // Format card number: XXXX-XXXX-XXXX-XXXX
-    const formatCardNumber = (number) => {
-        if (!number) return 'N/A';
-        const numStr = number.toString().padStart(16, '0');
-        return numStr.match(/.{1,4}/g)?.join('-') || numStr;
-    };
-
-    // Format points with commas
-    const formatPoints = (points) => {
-        return points?.toLocaleString() || '0';
+    // Format expiry date
+    const formatExpiryDate = (date) => {
+        if (!date) return 'N/A';
+        const d = new Date(date);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
     };
 
     return (
         <div className={`bg-gradient-to-r ${getTierGradient(tierName)} rounded-lg shadow-card p-8 text-white`}>
-            <div className="flex items-start justify-between mb-6">
+            <div className="flex items-start justify-between mb-3">
                 <div>
                     <h3 className="text-2xl font-bold mb-2">BKinema {tierName} Member</h3>
-                    <p className="text-sm opacity-90">Premium Membership</p>
                 </div>
                 <Icon name="star" className="text-4xl" />
             </div>
-
             <div className="mb-6">
                 <p className="text-sm opacity-90 mb-1">Member Name</p>
                 <p className="text-xl font-bold">{memberName || 'N/A'}</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="grid grid-cols-2 gap-4">
                 <div>
                     <p className="text-sm opacity-90 mb-1">Card Number</p>
-                    <p className="font-mono font-bold text-base">{formatCardNumber(cardNumber)}</p>
+                    <p className="font-bold">{cardNumber}</p>
                 </div>
-                {/* <div>
-                    <p className="text-sm opacity-90 mb-1">Valid Until</p>
-                    <p className="font-bold">{expiryDate || 'N/A'}</p>
-                </div> */}
-            </div>
-
-            <div className="border-t border-white border-opacity-30 pt-4">
-                <p className="text-sm">Accumulated Points: {formatPoints(accumulatedPoints)}</p>
+                <div>
+                    <p className="text-sm opacity-90 mb-1">Expiry Date</p>
+                    <p className="font-bold">{formatExpiryDate(expiryDate)}</p>
+                </div>
             </div>
         </div>
     );

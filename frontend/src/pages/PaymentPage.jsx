@@ -4,7 +4,7 @@ import Icon from '../components/common/Icon';
 import Notification from '../components/common/Notification';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import { useBooking } from '../context/BookingContext';
-import { bookingService, paymentService, couponService } from '../services';
+import { bookingService, paymentService, couponService, pointService } from '../services';
 import atmLogo from '../assets/media/payment/atm-logo.png';
 import visaMasterLogo from '../assets/media/payment/visa-mastercard-logo.png';
 import momoLogo from '../assets/media/payment/momo-logo.png';
@@ -107,7 +107,7 @@ export default function PaymentPage() {
     totalPrice = location.state?.totalPrice || bookingData.totalPrice || 0
   } = location.state || {};
 
-  const [cgvPoints] = useState(0);
+  const [cgvPoints, setCgvPoints] = useState(0);
   const [pointsToUse, setPointsToUse] = useState(0);
   const [selectedPayment, setSelectedPayment] = useState('');
   const [agreeTerms, setAgreeTerms] = useState(false);
@@ -142,6 +142,7 @@ export default function PaymentPage() {
     fwbPrice: 0,
     subtotal: 0,
     couponDiscount: 0,
+    pointsDiscount: 0,
     boxOfficeDiscount: 0,
     concessionDiscount: 0,
     membershipTier: null,
@@ -171,6 +172,16 @@ export default function PaymentPage() {
         const breakdown = await paymentService.calculateFinalAmount(currentBookingId);
         console.log('Price breakdown loaded:', breakdown);
         setPriceBreakdown(breakdown);
+
+        // Load customer points
+        try {
+          const pointsData = await pointService.getMyPoints();
+          console.log('Points data received:', pointsData);
+          console.log('Total points:', pointsData.totalPoints);
+          setCgvPoints(pointsData.totalPoints || 0);
+        } catch (error) {
+          console.error('Failed to load points:', error);
+        }
       } catch (error) {
         console.error('Failed to load booking data:', error);
         console.error('Error details:', error.message, error.stack);
@@ -179,6 +190,7 @@ export default function PaymentPage() {
           fwbPrice: comboTotal || 0,
           subtotal: totalPrice || 0,
           couponDiscount: 0,
+          pointsDiscount: 0,
           boxOfficeDiscount: 0,
           concessionDiscount: 0,
           membershipTier: null,
@@ -321,7 +333,27 @@ export default function PaymentPage() {
     loadCoupons();
   }, [expandedSection]);
 
-  const handleApplyPoints = () => {
+  const handleApplyPoints = async () => {
+    if (!pointsToUse || pointsToUse <= 0) {
+      setNotification({
+        isOpen: true,
+        title: 'Invalid Points',
+        message: 'Please enter a valid number of points.',
+        type: 'warning'
+      });
+      return;
+    }
+
+    if (pointsToUse < 10) {
+      setNotification({
+        isOpen: true,
+        title: 'Minimum Points Required',
+        message: 'Minimum 10 points required for redemption.',
+        type: 'warning'
+      });
+      return;
+    }
+
     if (pointsToUse > cgvPoints) {
       setNotification({
         isOpen: true,
@@ -330,6 +362,59 @@ export default function PaymentPage() {
         type: 'warning'
       });
       return;
+    }
+
+    try {
+      const result = await pointService.applyPoints(currentBookingId, pointsToUse);
+      
+      // Reload price breakdown to get updated amounts
+      const breakdown = await paymentService.calculateFinalAmount(currentBookingId);
+      setPriceBreakdown(breakdown);
+
+      // Note: Customer points display will remain the same until payment is confirmed
+      // Points are only deducted from customer when payment succeeds
+
+      setNotification({
+        isOpen: true,
+        title: 'Success',
+        message: `Applied ${pointsToUse} points! Discount: ₫${Math.round(result.discount).toLocaleString()}`,
+        type: 'success'
+      });
+
+      setPointsToUse(0);
+    } catch (error) {
+      setNotification({
+        isOpen: true,
+        title: 'Error',
+        message: error.message || 'Failed to apply points',
+        type: 'error'
+      });
+    }
+  };
+
+  const handleRemovePoints = async () => {
+    try {
+      await pointService.removePoints(currentBookingId);
+      
+      // Reload price breakdown to get updated amounts
+      const breakdown = await paymentService.calculateFinalAmount(currentBookingId);
+      setPriceBreakdown(breakdown);
+
+      setNotification({
+        isOpen: true,
+        title: 'Success',
+        message: 'Points removed successfully',
+        type: 'success'
+      });
+
+      setPointsToUse(0);
+    } catch (error) {
+      setNotification({
+        isOpen: true,
+        title: 'Error',
+        message: error.message || 'Failed to remove points',
+        type: 'error'
+      });
     }
   };
 
@@ -427,6 +512,7 @@ export default function PaymentPage() {
 
   const totalDiscount = (priceBreakdown.boxOfficeDiscount || 0) +
     (priceBreakdown.concessionDiscount || 0) +
+    (priceBreakdown.pointsDiscount || 0) +
     (priceBreakdown.couponDiscount || 0);
 
   const finalTotal = priceBreakdown.finalAmount || 0;
@@ -630,8 +716,7 @@ export default function PaymentPage() {
                             type="text"
                             value={couponCode}
                             onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                            className="border border-gray-300 rounded px-3 py-2 flex-1 uppercase"
-                            placeholder="Enter coupon code"
+                            className="border border-gray-300 rounded px-3 py-2 flex-1"
                           />
                           <button
                             onClick={handleApplyCoupon}
@@ -708,7 +793,7 @@ export default function PaymentPage() {
                             </div>
                           ) : (
                             <p className="text-sm text-gray-500 text-center py-4">
-                              No available coupons. Please login or check your account.
+                              No available coupons.
                             </p>
                           )}
                         </div>
@@ -726,26 +811,41 @@ export default function PaymentPage() {
                     </button>
                     {expandedSection === 'points' && (
                       <div className="mt-2 p-4 bg-white border border-gray-200 rounded">
-                        <p className="text-sm text-gray-600 mb-2">Your Points: {cgvPoints} P</p>
+                        <p className="text-sm text-gray-600 mb-2">Your Points: <span className="font-bold">{cgvPoints} P</span></p>
+                        <p className="text-xs text-gray-500 mb-3">1 point = ₫1,000 | Min: 10 points | Max: 90% of total</p>
                         <div className="flex items-center gap-2 mb-2">
                           <input
                             type="number"
-                            value={pointsToUse}
+                            value={pointsToUse || ''}
                             onChange={(e) => setPointsToUse(parseInt(e.target.value) || 0)}
-                            className="border border-gray-300 rounded px-3 py-2 flex-1"
+                            className="border border-gray-300 rounded px-3 py-2 flex-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             min="0"
-                            placeholder="0"
+                            max={cgvPoints}
+                            placeholder="Enter points"
                           />
                           <button
                             onClick={handleApplyPoints}
-                            className="bg-primary hover:bg-secondary text-white px-6 py-2 rounded font-semibold"
+                            disabled={!pointsToUse || pointsToUse < 10 || pointsToUse > cgvPoints}
+                            className="bg-primary hover:bg-secondary text-white px-6 py-2 rounded font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed"
                           >
                             Apply
                           </button>
                         </div>
-                        <p className="text-right text-sm">
-                          Discount: <span className="font-bold">₫{Math.round(totalDiscount).toLocaleString()}</span>
-                        </p>
+                        {priceBreakdown.pointsDiscount > 0 && (
+                          <div className="bg-green-50 border border-green-200 rounded p-3 mb-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <p className="text-green-600">Discount: ₫{Math.round(priceBreakdown.pointsDiscount).toLocaleString()}</p>
+                              </div>
+                              <button
+                                onClick={handleRemovePoints}
+                                className="text-red-600 hover:text-red-800 font-semibold"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -994,6 +1094,17 @@ export default function PaymentPage() {
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-700">Coupon Discount:</span>
                         <span className="font-semibold text-gray-900">₫{Math.round(priceBreakdown.couponDiscount).toLocaleString()}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Points Discount */}
+                  {priceBreakdown.pointsDiscount > 0 && (
+                    <div>
+                      <p className="font-semibold text-gray-900 mb-2 text-sm">BKinema Points</p>
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-700">Points Discount:</span>
+                        <span className="font-semibold text-gray-900">₫{Math.round(priceBreakdown.pointsDiscount).toLocaleString()}</span>
                       </div>
                     </div>
                   )}

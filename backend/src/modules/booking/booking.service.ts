@@ -109,16 +109,30 @@ export class BookingService {
   }
 
   /**
-   * Get all bookings for a customer
+   * Get all bookings for a customer with pagination
    */
-  async getMyBookings(customerId: number) {
+  async getMyBookings(customerId: number, limit: number = 5, offset: number = 0) {
     try {
-      const [bookings] = await this.dataSource.query(
-        'CALL sp_get_customer_bookings(?)',
-        [customerId]
+      const result = await this.dataSource.query(
+        'CALL sp_get_customer_bookings(?, ?, ?)',
+        [customerId, limit, offset]
       );
 
-      return bookings;
+      // result[0] = bookings array
+      // result[1] = pagination metadata
+      const bookings = result[0] || [];
+      const paginationInfo = result[1]?.[0] || { totalCount: 0, limit, offset, hasMore: false };
+
+      return {
+        bookings,
+        pagination: {
+          totalCount: paginationInfo.totalCount,
+          limit: paginationInfo.limit,
+          offset: paginationInfo.offset,
+          hasMore: paginationInfo.hasMore === 1,
+          totalPages: Math.ceil(paginationInfo.totalCount / limit),
+        },
+      };
     } catch (error: any) {
       throw new InternalServerErrorException(
         error.sqlMessage || error.message || 'Failed to fetch bookings',

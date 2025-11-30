@@ -89,12 +89,12 @@ class BookingService {
   }
 
   /**
-   * Get all bookings for current user
+   * Get all bookings for current user with pagination
    */
-  async getMyBookings() {
+  async getMyBookings(limit = 5, offset = 0) {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${config.apiUrl}/booking/my-bookings`, {
+      const response = await fetch(`${config.apiUrl}/booking/my-bookings?limit=${limit}&offset=${offset}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',

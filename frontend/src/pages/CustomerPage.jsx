@@ -535,93 +535,7 @@ const AccountDetailsTab = () => {
   );
 };
 
-const PointTab = () => {
-  const [totalPoints, setTotalPoints] = useState(0);
-  const [pointHistory, setPointHistory] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchPoints();
-  }, []);
-
-  const fetchPoints = async () => {
-    try {
-      setLoading(true);
-      const data = await pointService.getMyPoints();
-      setTotalPoints(data.totalPoints || 0);
-      setPointHistory(data.history || []);
-    } catch (error) {
-      console.error('Failed to fetch points:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-CA'); // YYYY-MM-DD format
-  };
-
-  if (loading) {
-    return (
-      <div className="text-center py-12">
-        <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-center bg-primary text-white py-4 px-8 rounded-lg mb-6">
-        POINT
-      </h2>
-      <div className="bg-gradient-to-r from-primary to-secondary rounded-lg shadow-card p-8 text-white">
-        <div className="text-center">
-          <p className="text-lg mb-2">Total Points</p>
-          <p className="text-5xl font-bold">{totalPoints.toLocaleString()}</p>
-          <p className="mt-4">Keep earning to unlock more rewards!</p>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-lg shadow-card p-6">
-        <h3 className="text-xl font-bold text-primary mb-4">Point History</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b-2 border-primary">
-                <th className="text-left py-3 px-4 font-semibold text-text-main">Date</th>
-                <th className="text-left py-3 px-4 font-semibold text-text-main">Description</th>
-                <th className="text-right py-3 px-4 font-semibold text-text-main">Points</th>
-                <th className="text-right py-3 px-4 font-semibold text-text-main">Balance</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pointHistory.length > 0 ? (
-                pointHistory.map((record, index) => (
-                  <tr key={index} className="border-b border-gray-200 hover:bg-background">
-                    <td className="py-3 px-4 text-text-sub">{formatDate(record.date)}</td>
-                    <td className="py-3 px-4 text-text-main">{record.description}</td>
-                    <td className={`py-3 px-4 text-right font-semibold ${record.points.toString().startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
-                      {record.points}
-                    </td>
-                    <td className="py-3 px-4 text-right text-text-main">₫{Math.round(parseFloat(record.balance || 0)).toLocaleString()}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="4" className="py-8 text-center text-text-sub">
-                    No point history found
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-};
+// PointTab component removed - functionality integrated into MembershipCardTab
 
 const GiftCardTab = () => {
   const [giftCards, setGiftCards] = useState([]);
@@ -952,21 +866,42 @@ const BookingHistoryTab = () => {
     message: '',
     onConfirm: () => {}
   });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({
+    limit: 5,
+    totalCount: 0,
+    totalPages: 0,
+  });
 
   useEffect(() => {
-    fetchBookings();
+    fetchBookings(1);
   }, []);
 
-  const fetchBookings = async () => {
+  const fetchBookings = async (page = 1) => {
     try {
       setLoading(true);
-      const data = await bookingService.getMyBookings();
-      setBookings(data || []);
+      const offset = (page - 1) * 5;
+      const result = await bookingService.getMyBookings(5, offset);
+      
+      // Backend returns: { bookings: [], pagination: { totalCount, limit, offset, hasMore, totalPages } }
+      setBookings(result.bookings || []);
+      setPagination({
+        limit: result.pagination?.limit || 5,
+        totalCount: result.pagination?.totalCount || 0,
+        totalPages: result.pagination?.totalPages || 0,
+      });
+      setCurrentPage(page);
     } catch (error) {
       console.error('Failed to fetch bookings:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePageChange = (page) => {
+    if (page < 1 || page > pagination.totalPages || loading) return;
+    fetchBookings(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const openRefundModal = (booking) => {
@@ -1255,6 +1190,98 @@ const BookingHistoryTab = () => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Pagination Controls */}
+      {pagination.totalPages > 1 && (
+        <div className="mt-6 flex justify-center items-center gap-2">
+          {/* Previous Button */}
+          <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1 || loading}
+            className="px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <span className="text-text-main">←</span>
+          </button>
+
+          {/* Page Numbers */}
+          {(() => {
+            const pages = [];
+            const maxVisible = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+            let endPage = Math.min(pagination.totalPages, startPage + maxVisible - 1);
+            
+            if (endPage - startPage + 1 < maxVisible) {
+              startPage = Math.max(1, endPage - maxVisible + 1);
+            }
+
+            // First page
+            if (startPage > 1) {
+              pages.push(
+                <button
+                  key={1}
+                  onClick={() => handlePageChange(1)}
+                  className="px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 transition-colors"
+                >
+                  1
+                </button>
+              );
+              if (startPage > 2) {
+                pages.push(<span key="dots1" className="px-2 text-text-sub">...</span>);
+              }
+            }
+
+            // Middle pages
+            for (let i = startPage; i <= endPage; i++) {
+              pages.push(
+                <button
+                  key={i}
+                  onClick={() => handlePageChange(i)}
+                  disabled={loading}
+                  className={`px-3 py-2 rounded-lg border transition-colors ${
+                    currentPage === i
+                      ? 'bg-primary text-white border-primary'
+                      : 'border-gray-300 hover:bg-gray-100'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  {i}
+                </button>
+              );
+            }
+
+            // Last page
+            if (endPage < pagination.totalPages) {
+              if (endPage < pagination.totalPages - 1) {
+                pages.push(<span key="dots2" className="px-2 text-text-sub">...</span>);
+              }
+              pages.push(
+                <button
+                  key={pagination.totalPages}
+                  onClick={() => handlePageChange(pagination.totalPages)}
+                  className="px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 transition-colors"
+                >
+                  {pagination.totalPages}
+                </button>
+              );
+            }
+
+            return pages;
+          })()}
+
+          {/* Next Button */}
+          <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === pagination.totalPages || loading}
+            className="px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <span className="text-text-main">→</span>
+          </button>
+
+          {/* Page Info */}
+          <span className="ml-4 text-text-sub text-sm">
+            Page {currentPage} of {pagination.totalPages}
+          </span>
         </div>
       )}
 
@@ -1728,8 +1755,36 @@ const RefundTab = () => {
 
 const MembershipCardTab = () => {
   const [cardData, setCardData] = useState(null);
+  const [pointHistory, setPointHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({
+    limit: 10,
+    totalCount: 0,
+    totalPages: 0,
+  });
+
+  const fetchPointHistory = useCallback(async (page = 1) => {
+    try {
+      setLoading(true);
+      const offset = (page - 1) * 10;
+      const pointData = await pointService.getMyPoints(10, offset);
+      
+      const history = pointData?.history || [];
+      setPointHistory(history);
+      setPagination({
+        limit: pointData?.limit || 10,
+        totalCount: pointData?.totalCount || 0,
+        totalPages: Math.ceil((pointData?.totalCount || 0) / 10),
+      });
+      setCurrentPage(page);
+    } catch (err) {
+      console.error('Failed to fetch point history:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const fetchMembershipCard = useCallback(async () => {
     try {
@@ -1737,17 +1792,31 @@ const MembershipCardTab = () => {
       setError(null);
       const data = await membershipService.getMembershipCard();
       setCardData(data);
+      
+      // Fetch first page of point history
+      await fetchPointHistory(1);
     } catch (err) {
       console.error('Failed to fetch membership card:', err);
       setError(err.message || 'Failed to load membership card');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchPointHistory]);
+
+  const handlePageChange = (page) => {
+    if (page < 1 || page > pagination.totalPages) return;
+    fetchPointHistory(page);
+  };
 
   useEffect(() => {
     fetchMembershipCard();
   }, [fetchMembershipCard]);
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-CA'); // YYYY-MM-DD format
+  };
 
   return (
     <div className="space-y-6">
@@ -1778,38 +1847,256 @@ const MembershipCardTab = () => {
         <>
           <MembershipCard cardData={cardData} />
 
+          {/* Points Summary */}
           <div className="bg-white rounded-lg shadow-card p-6">
-            <h3 className="text-xl font-bold text-primary mb-4">Membership Benefits</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-start">
-                <Icon name="check-circle" className="text-green-600 text-xl mr-3 mt-1" />
-                <div>
-                  <p className="font-semibold text-text-main">Priority Booking</p>
-                  <p className="text-text-sub text-sm">Get early access to tickets</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Total Spent Column with Timeline */}
+              <div className="overflow-hidden">
+                <h3 className="text-lg font-semibold text-text-main mb-4">Total Spent</h3>
+                <div className="mb-6">
+                  <p className="text-4xl font-bold text-primary mb-2">
+                    ₫{Math.round(cardData.totalSpent || 0).toLocaleString()}
+                  </p>
+                </div>
+
+                {/* Timeline Progress */}
+                <div className="relative px-10">
+                  {/* Pin Markers (Top - Oval badges with tier names) */}
+                  <div className="relative" style={{ height: '28px' }}>
+                    {/* Member Pin - at 0 position (0% start) */}
+                    <div className="absolute" style={{ left: '0.5%', transform: 'translateX(-50%)' }}>
+                      <div className="px-2 py-1 rounded-full bg-gradient-to-r from-blue-400 to-blue-600 shadow-md">
+                        <span className="text-white text-xs font-bold whitespace-nowrap">MEMBER</span>
+                      </div>
+                    </div>
+
+                    {/* VIP Pin - at 4M position (60% = 3/5) */}
+                    <div className="absolute" style={{ left: '60%', transform: 'translateX(-50%)' }}>
+                      <div className="px-2 py-1 rounded-full bg-gradient-to-r from-accent to-orange-600 shadow-md">
+                        <span className="text-white text-xs font-bold whitespace-nowrap">VIP</span>
+                      </div>
+                    </div>
+
+                    {/* VVIP Pin - at 8M position (100%) */}
+                    <div className="absolute" style={{ left: '99.5%', transform: 'translateX(-50%)' }}>
+                      <div className="px-2 py-1 rounded-full bg-gradient-to-r from-secondary to-purple-700 shadow-md">
+                        <span className="text-white text-xs font-bold whitespace-nowrap">VVIP</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Vertical Lines from Pins to Progress Bar */}
+                  <div className="relative mb-1" style={{ height: '16px' }}>
+                    {/* Member Line */}
+                    <div className="absolute h-full border-l-2 border-blue-600" style={{ left: '0.5%' }}></div>
+                    
+                    {/* VIP Line */}
+                    <div className="absolute h-full border-l-2 border-orange-600" style={{ left: '60%' }}></div>
+                    
+                    {/* VVIP Line */}
+                    <div className="absolute h-full border-l-2 border-purple-700" style={{ left: '99.5%' }}></div>
+                  </div>
+
+                  {/* Progress Bar Track (Middle - Gray background with primary fill) */}
+                  <div className="relative h-4 bg-gray-200 rounded-full overflow-visible mb-1">
+                    {/* VIP Milestone Divider - Dashed line */}
+                    <div 
+                      className="absolute top-0 h-full border-l-2 border-dashed border-gray-400 z-10" 
+                      style={{ left: '60%' }}
+                    ></div>
+                    
+                    {/* Progress Fill (Primary color showing current progress) */}
+                    <div
+                      className="absolute h-full bg-primary rounded-full transition-all duration-500"
+                      style={{
+                        width: `${(() => {
+                          const spent = cardData.totalSpent || 0;
+                          if (spent >= 8000000) return 100;
+                          if (spent >= 4000000) {
+                            // VIP to VVIP: 60% + (spent - 4M) / 4M * 40%
+                            return 60 + ((spent - 4000000) / 4000000) * 40;
+                          }
+                          // Member to VIP: (spent / 4M) * 60%
+                          return (spent / 4000000) * 60;
+                        })()}%`
+                      }}
+                    ></div>
+                  </div>
+
+                  {/* Milestone Values (Bottom - Spending thresholds) */}
+                  <div className="relative mb-4" style={{ height: '20px' }}>
+                    {/* Member Value - at  0k position (0%) */}
+                    <div className="absolute" style={{ left: '0%', transform: 'translateX(0%)' }}>
+                      <p className="text-text-sub whitespace-nowrap">₫0</p>
+                    </div>
+
+                    {/* VIP Value - at 4M position (60%) */}
+                    <div className="absolute" style={{ left: '60%', transform: 'translateX(-50%)' }}>
+                      <p className="text-text-sub whitespace-nowrap">₫4M</p>
+                    </div>
+
+                    {/* VVIP Value - at 8M position (100%) */}
+                    <div className="absolute" style={{ left: '100%', transform: 'translateX(-100%)' }}>
+                      <p className="text-text-sub whitespace-nowrap">₫8M</p>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-start">
-                <Icon name="check-circle" className="text-green-600 text-xl mr-3 mt-1" />
-                <div>
-                  <p className="font-semibold text-text-main">Exclusive Discounts</p>
-                  <p className="text-text-sub text-sm">Up to 20% off on tickets</p>
+
+              {/* Accumulated Points Column */}
+              <div>
+                <h3 className="text-lg font-semibold text-text-main mb-4">Accumulated Points</h3>
+                <div className="mb-6">
+                  <p className="text-4xl font-bold text-primary mb-2">
+                    {cardData.accumulatedPoints?.toLocaleString() || 0} points
+                  </p>
                 </div>
-              </div>
-              <div className="flex items-start">
-                <Icon name="check-circle" className="text-green-600 text-xl mr-3 mt-1" />
-                <div>
-                  <p className="font-semibold text-text-main">Bonus Points</p>
-                  <p className="text-text-sub text-sm">Earn 2x points on every purchase</p>
+
+                {/* Points Info */}
+                <div className="space-y-3"> 
+                  <div className="flex items-center gap-3">
+                      <span className="w-2 h-2 bg-secondary rounded-full"></span>
+                      <p className="text-text-main">1 point = 1,000 VND, equivalent to cash.</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                      <span className="w-2 h-2 bg-secondary rounded-full"></span>
+                      <p className="text-text-main">The points and membership tier will be resetted on expiry date.</p>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-start">
-                <Icon name="check-circle" className="text-green-600 text-xl mr-3 mt-1" />
-                <div>
-                  <p className="font-semibold text-text-main">Birthday Rewards</p>
-                  <p className="text-text-sub text-sm">Free tickets on your birthday</p>
-                </div>
+  
               </div>
             </div>
+          </div>
+
+          {/* Point History */}
+          <div className="bg-white rounded-lg shadow-card p-6">
+            <h3 className="text-xl font-bold text-primary mb-4">Point History</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b-2 border-primary">
+                    <th className="text-left py-3 px-4 font-semibold text-text-main">Booking ID</th>
+                    <th className="text-left py-3 px-4 font-semibold text-text-main">Date - Time</th>
+                    <th className="text-left py-3 px-4 font-semibold text-text-main">Description</th>
+                    <th className="text-right py-3 px-4 font-semibold text-text-main">Points</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pointHistory.length > 0 ? (
+                    pointHistory.map((record, index) => (
+                      <tr key={index} className="border-b border-gray-200 hover:bg-background">
+                        <td className="py-3 px-4 text-text-main font-mono">#{record.booking_id}</td>
+                        <td className="py-3 px-4 text-text-sub">{record.datetime || formatDate(record.date)}</td>
+                        <td className="py-3 px-4 text-text-main">{record.description}</td>
+                        <td className={`py-3 px-4 text-right font-semibold ${
+                          record.points.startsWith('+') ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {record.points}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="4" className="py-8 text-center text-text-sub">
+                        No point history found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            
+            {/* Pagination Controls */}
+            {pagination.totalPages > 1 && (
+              <div className="mt-6 flex justify-center items-center gap-2">
+                {/* Previous Button */}
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1 || loading}
+                  className="px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <span className="text-text-main">←</span>
+                </button>
+
+                {/* Page Numbers */}
+                {(() => {
+                  const pages = [];
+                  const maxVisible = 5;
+                  let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+                  let endPage = Math.min(pagination.totalPages, startPage + maxVisible - 1);
+                  
+                  if (endPage - startPage + 1 < maxVisible) {
+                    startPage = Math.max(1, endPage - maxVisible + 1);
+                  }
+
+                  // First page
+                  if (startPage > 1) {
+                    pages.push(
+                      <button
+                        key={1}
+                        onClick={() => handlePageChange(1)}
+                        className="px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 transition-colors"
+                      >
+                        1
+                      </button>
+                    );
+                    if (startPage > 2) {
+                      pages.push(<span key="dots1" className="px-2 text-text-sub">...</span>);
+                    }
+                  }
+
+                  // Middle pages
+                  for (let i = startPage; i <= endPage; i++) {
+                    pages.push(
+                      <button
+                        key={i}
+                        onClick={() => handlePageChange(i)}
+                        disabled={loading}
+                        className={`px-3 py-2 rounded-lg border transition-colors ${
+                          currentPage === i
+                            ? 'bg-primary text-white border-primary'
+                            : 'border-gray-300 hover:bg-gray-100'
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                      >
+                        {i}
+                      </button>
+                    );
+                  }
+
+                  // Last page
+                  if (endPage < pagination.totalPages) {
+                    if (endPage < pagination.totalPages - 1) {
+                      pages.push(<span key="dots2" className="px-2 text-text-sub">...</span>);
+                    }
+                    pages.push(
+                      <button
+                        key={pagination.totalPages}
+                        onClick={() => handlePageChange(pagination.totalPages)}
+                        className="px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 transition-colors"
+                      >
+                        {pagination.totalPages}
+                      </button>
+                    );
+                  }
+
+                  return pages;
+                })()}
+
+                {/* Next Button */}
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === pagination.totalPages || loading}
+                  className="px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <span className="text-text-main">→</span>
+                </button>
+
+                {/* Page Info */}
+                <span className="ml-4 text-text-sub text-sm">
+                  Page {currentPage} of {pagination.totalPages}
+                </span>
+              </div>
+            )}
           </div>
         </>
       )}
@@ -1826,7 +2113,6 @@ const CustomerPage = () => {
     { id: 'account', label: 'ACCOUNT DETAILS', icon: 'user' },
     { id: 'bookings', label: 'MY BOOKINGS', icon: 'film' },
     { id: 'membership', label: 'MEMBERSHIP CARD', icon: 'credit-card' },
-    { id: 'point', label: 'POINT', icon: 'star' },
     { id: 'giftcard', label: 'GIFT CARD', icon: 'gift' },
     { id: 'voucher', label: 'VOUCHER', icon: 'ticket' },
     { id: 'coupon', label: 'COUPON', icon: 'tag' },
@@ -1844,8 +2130,6 @@ const CustomerPage = () => {
         return <BookingHistoryTab />;
       case 'membership':
         return <MembershipCardTab />;
-      case 'point':
-        return <PointTab />;
       case 'giftcard':
         return <GiftCardTab />;
       case 'voucher':

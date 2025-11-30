@@ -1,7 +1,7 @@
 -- ============================================
 -- Triggers
 -- Database: bkinema
--- Generated: 2025-11-29T21:52:10.119Z
+-- Generated: 2025-11-30T09:44:39.293Z
 -- ============================================
 
 -- Trigger: trg_after_user_insert
@@ -9,9 +9,34 @@
 DROP TRIGGER IF EXISTS trg_after_user_insert;
 DELIMITER $$
 CREATE DEFINER="avnadmin"@"%" TRIGGER "trg_after_user_insert" AFTER INSERT ON "User" FOR EACH ROW BEGIN
+    DECLARE v_membership VARCHAR(50);
+    DECLARE v_age INT;
+    DECLARE v_valid_until DATE;
+    
     IF NOT EXISTS (SELECT 1 FROM staff WHERE user_id = NEW.id) THEN
-        INSERT INTO customer (user_id, accumulated_points, membership_name)
-        VALUES (NEW.id, 0, fn_get_default_membership());
+        -- Calculate age
+        IF NEW.birthday IS NOT NULL THEN
+            SET v_age = TIMESTAMPDIFF(YEAR, NEW.birthday, CURDATE());
+        ELSE
+            SET v_age = NULL;
+        END IF;
+        
+        -- Determine initial membership based on age
+        IF v_age IS NOT NULL AND v_age < 22 THEN
+            SET v_membership = 'U22';
+        ELSE
+            SET v_membership = 'Member';
+        END IF;
+        
+        -- Set membership valid until next June 1st
+        IF MONTH(CURDATE()) < 6 OR (MONTH(CURDATE()) = 6 AND DAY(CURDATE()) = 1) THEN
+            SET v_valid_until = DATE(CONCAT(YEAR(CURDATE()), '-06-01'));
+        ELSE
+            SET v_valid_until = DATE(CONCAT(YEAR(CURDATE()) + 1, '-06-01'));
+        END IF;
+        
+        INSERT INTO customer (user_id, accumulated_points, total_spent, membership_name, membership_valid_until)
+        VALUES (NEW.id, 0, 0, v_membership, v_valid_until);
     END IF;
 END$$
 DELIMITER ;
@@ -26,48 +51,13 @@ CREATE DEFINER="avnadmin"@"%" TRIGGER "trg_before_customer_update" BEFORE UPDATE
         SET MESSAGE_TEXT = 'Accumulated points cannot be negative';
     END IF;
     
-    SET NEW.membership_name = fn_get_membership_by_points(NEW.accumulated_points);
-END$$
-DELIMITER ;
-
--- Trigger: trg_customer_membership_bi
--- Table: customer
-DROP TRIGGER IF EXISTS trg_customer_membership_bi;
-DELIMITER $$
-CREATE DEFINER="avnadmin"@"%" TRIGGER "trg_customer_membership_bi" BEFORE INSERT ON "customer" FOR EACH ROW BEGIN
-    DECLARE v_tier_name VARCHAR(255);
-
-    -- Find highest tier whose min_point <= accumulated_points
-    SELECT m.tier_name
-    INTO v_tier_name
-    FROM membership AS m
-    WHERE m.uk_membership_min_point <= NEW.accumulated_points
-    ORDER BY m.uk_membership_min_point DESC
-    LIMIT 1;
-
-    -- If a tier is found, set it; otherwise leave NULL (FK allows NULL)
-    SET NEW.membership_name = v_tier_name;
-END$$
-DELIMITER ;
-
--- Trigger: trg_customer_membership_bu
--- Table: customer
-DROP TRIGGER IF EXISTS trg_customer_membership_bu;
-DELIMITER $$
-CREATE DEFINER="avnadmin"@"%" TRIGGER "trg_customer_membership_bu" BEFORE UPDATE ON "customer" FOR EACH ROW BEGIN
-    DECLARE v_tier_name VARCHAR(255);
-
-    -- Only react when points actually increase
-    IF NEW.accumulated_points > OLD.accumulated_points THEN
-        SELECT m.tier_name
-        INTO v_tier_name
-        FROM membership AS m
-        WHERE m.uk_membership_min_point <= NEW.accumulated_points
-        ORDER BY m.uk_membership_min_point DESC
-        LIMIT 1;
-
-        SET NEW.membership_name = v_tier_name;
+    IF NEW.total_spent < 0 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Total spent cannot be negative';
     END IF;
+    
+    -- Membership is updated by stored procedure, not trigger
+    -- This trigger only validates data
 END$$
 DELIMITER ;
 

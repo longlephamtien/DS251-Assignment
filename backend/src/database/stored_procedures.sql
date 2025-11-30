@@ -1,7 +1,7 @@
 -- ============================================
 -- Stored Procedures
 -- Database: bkinema
--- Generated: 2025-11-29T21:52:07.338Z
+-- Generated: 2025-11-30T09:44:32.677Z
 -- ============================================
 
 -- Procedure: sp_apply_coupon
@@ -65,6 +65,99 @@ BEGIN
 END$$
 DELIMITER ;
 
+-- Procedure: sp_apply_points
+DROP PROCEDURE IF EXISTS sp_apply_points;
+DELIMITER $$
+CREATE DEFINER="avnadmin"@"%" PROCEDURE "sp_apply_points"(
+    IN p_booking_id BIGINT,
+    IN p_customer_id BIGINT,
+    IN p_points_to_use INT
+)
+BEGIN
+    DECLARE v_accumulated_points INT;
+    DECLARE v_booking_customer_id BIGINT;
+    DECLARE v_booking_status VARCHAR(50);
+    DECLARE v_current_points_used INT DEFAULT 0;
+    DECLARE v_subtotal DECIMAL(10,2);
+    DECLARE v_max_points_allowed INT;
+    DECLARE v_base_seat_price DECIMAL(10,2);
+    DECLARE v_fwb_price DECIMAL(10,2);
+    
+    -- Validate points amount
+    IF p_points_to_use < 10 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Minimum 10 points required for redemption';
+    END IF;
+    
+    -- Get customer's accumulated points
+    SELECT accumulated_points
+    INTO v_accumulated_points
+    FROM customer
+    WHERE user_id = p_customer_id;
+    
+    IF v_accumulated_points IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Customer not found';
+    END IF;
+    
+    -- Check if customer has enough points
+    IF v_accumulated_points < p_points_to_use THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Insufficient points';
+    END IF;
+    
+    -- Validate booking ownership and status
+    SELECT customer_id, status, COALESCE(points_used, 0)
+    INTO v_booking_customer_id, v_booking_status, v_current_points_used
+    FROM booking
+    WHERE id = p_booking_id;
+    
+    IF v_booking_customer_id IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Booking not found';
+    END IF;
+    
+    IF v_booking_customer_id != p_customer_id THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Booking does not belong to this customer';
+    END IF;
+    
+    IF v_booking_status != 'Pending' THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Can only apply points to pending bookings';
+    END IF;
+    
+    -- Calculate subtotal (tickets + F&B)
+    SELECT COALESCE(SUM(price), 0)
+    INTO v_base_seat_price
+    FROM showtime_seat
+    WHERE booking_id = p_booking_id AND status IN ('Held', 'Booked');
+    
+    SELECT COALESCE(SUM(price * quantity), 0)
+    INTO v_fwb_price
+    FROM fwb
+    WHERE booking_id = p_booking_id;
+    
+    SET v_subtotal = v_base_seat_price + v_fwb_price;
+    
+    -- Points can cover up to 90% of transaction value
+    -- 1 point = 1,000 VND
+    SET v_max_points_allowed = FLOOR(v_subtotal * 0.9 / 1000);
+    
+    IF p_points_to_use > v_max_points_allowed THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Points can cover up to 90% of transaction';
+    END IF;
+    
+    -- Apply points to booking (only update points_used, DO NOT deduct from customer yet)
+    -- Points will be deducted from customer ONLY when payment is confirmed in sp_confirm_payment
+    UPDATE booking
+    SET points_used = p_points_to_use
+    WHERE id = p_booking_id;
+    
+END$$
+DELIMITER ;
+
 -- Procedure: sp_calculate_final_amount
 DROP PROCEDURE IF EXISTS sp_calculate_final_amount;
 DELIMITER $$
@@ -77,6 +170,7 @@ CREATE DEFINER="avnadmin"@"%" PROCEDURE "sp_calculate_final_amount"(
     OUT p_coupon_type VARCHAR(50),
     OUT p_box_office_discount DECIMAL(10,2),
     OUT p_concession_discount DECIMAL(10,2),
+    OUT p_points_discount DECIMAL(10,2),
     OUT p_membership_tier VARCHAR(255),
     OUT p_final_amount DECIMAL(10,2)
 )
@@ -89,6 +183,7 @@ sp_label: BEGIN
     DECLARE v_seat_after_box_discount DECIMAL(10,2) DEFAULT 0;
     DECLARE v_fwb_after_concession_discount DECIMAL(10,2) DEFAULT 0;
     DECLARE v_booking_status VARCHAR(50);
+    DECLARE v_points_used INT DEFAULT 0;
 
     -- Init OUT params
     SET p_base_seat_price     = 0;
@@ -98,6 +193,7 @@ sp_label: BEGIN
     SET p_coupon_type         = NULL;
     SET p_box_office_discount = 0;
     SET p_concession_discount = 0;
+    SET p_points_discount     = 0;
     SET p_membership_tier     = NULL;
     SET p_final_amount        = 0;
 
@@ -134,34 +230,18 @@ sp_label: BEGIN
 
     SET p_subtotal = p_base_seat_price + p_fwb_price;
 
-    -- 3. Get customer + membership tier
-    SELECT b.customer_id, c.membership_name
-    INTO v_customer_id, v_membership_name
+    -- 3. Get customer + membership tier + points used
+    SELECT b.customer_id, c.membership_name, COALESCE(b.points_used, 0)
+    INTO v_customer_id, v_membership_name, v_points_used
     FROM booking b
     LEFT JOIN customer c ON c.user_id = b.customer_id
     WHERE b.id = p_booking_id
     LIMIT 1;
 
-    -- 4. Membership discounts (if exists)
-    IF v_membership_name IS NOT NULL THEN
-        SELECT box_office_discount, concession_discount
-        INTO v_box_discount_percent, v_concession_discount_percent
-        FROM membership
-        WHERE tier_name = v_membership_name
-        LIMIT 1;
-
-        IF v_box_discount_percent IS NOT NULL OR v_concession_discount_percent IS NOT NULL THEN
-            SET p_membership_tier = v_membership_name;
-
-            -- Box office discount on tickets
-            SET p_box_office_discount =
-                ROUND(p_base_seat_price * COALESCE(v_box_discount_percent, 0) / 100, 2);
-
-            -- Concession discount on F&B
-            SET p_concession_discount =
-                ROUND(p_fwb_price * COALESCE(v_concession_discount_percent, 0) / 100, 2);
-        END IF;
-    END IF;
+    -- 4. Set membership tier (no discounts, only for display)
+    SET p_membership_tier = v_membership_name;
+    SET p_box_office_discount = 0;
+    SET p_concession_discount = 0;
 
     -- 5. Coupon discount: only applied coupons (discount_amount > 0)
     SELECT 
@@ -177,17 +257,11 @@ sp_label: BEGIN
 
     SET p_coupon_discount = COALESCE(v_coupon_discount_amount, 0);
 
-    -- 6. Calculate final amount
-    SET v_seat_after_box_discount =
-        p_base_seat_price - p_box_office_discount;
+    -- 6. Points discount: 1 point = 1,000 VND
+    SET p_points_discount = v_points_used * 1000;
 
-    SET v_fwb_after_concession_discount =
-        p_fwb_price - p_concession_discount;
-
-    SET p_final_amount =
-        v_seat_after_box_discount +
-        v_fwb_after_concession_discount -
-        p_coupon_discount;
+    -- 7. Calculate final amount (no membership discounts, only coupon + points)
+    SET p_final_amount = p_subtotal - p_coupon_discount - p_points_discount;
 
     IF p_final_amount < 0 THEN
         SET p_final_amount = 0;
@@ -198,6 +272,7 @@ sp_label: BEGIN
     SET p_fwb_price             = ROUND(p_fwb_price, 2);
     SET p_subtotal              = ROUND(p_subtotal, 2);
     SET p_coupon_discount       = ROUND(p_coupon_discount, 2);
+    SET p_points_discount       = ROUND(p_points_discount, 2);
     SET p_box_office_discount   = ROUND(p_box_office_discount, 2);
     SET p_concession_discount   = ROUND(p_concession_discount, 2);
     SET p_final_amount          = ROUND(p_final_amount, 2);
@@ -437,6 +512,27 @@ CREATE DEFINER="avnadmin"@"%" PROCEDURE "sp_confirm_payment"(
 )
 BEGIN
     DECLARE v_customer_id BIGINT;
+    DECLARE v_ticket_amount DECIMAL(10,2);
+    DECLARE v_fnb_amount DECIMAL(10,2);
+    DECLARE v_has_coupon_applied INT DEFAULT 0;
+    DECLARE v_ticket_points INT DEFAULT 0;
+    DECLARE v_fnb_points INT DEFAULT 0;
+    DECLARE v_total_points INT DEFAULT 0;
+    DECLARE v_ticket_rate DECIMAL(5,2) DEFAULT 0;
+    DECLARE v_fnb_rate DECIMAL(5,2) DEFAULT 0;
+    DECLARE v_membership_tier VARCHAR(255);
+    DECLARE v_points_used INT DEFAULT 0;
+    
+    -- Variables for calculating final amount
+    DECLARE v_final_amount DECIMAL(10,2);
+    DECLARE v_base_seat_price DECIMAL(10,2);
+    DECLARE v_fwb_price DECIMAL(10,2);
+    DECLARE v_subtotal DECIMAL(10,2);
+    DECLARE v_coupon_discount DECIMAL(10,2);
+    DECLARE v_box_office_discount DECIMAL(10,2);
+    DECLARE v_concession_discount DECIMAL(10,2);
+    DECLARE v_points_discount DECIMAL(10,2);
+    DECLARE v_coupon_type VARCHAR(50);
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -446,9 +542,9 @@ BEGIN
 
     START TRANSACTION;
 
-    -- 1. Validate booking
-    SELECT customer_id
-    INTO v_customer_id
+    -- 1. Validate booking and get customer_id and points_used
+    SELECT customer_id, COALESCE(points_used, 0)
+    INTO v_customer_id, v_points_used
     FROM booking
     WHERE id = p_booking_id
       AND status = 'Pending'
@@ -459,7 +555,14 @@ BEGIN
             SET MESSAGE_TEXT = 'Booking not found or not in Pending status';
     END IF;
 
-    -- 2. Insert payment
+    -- 2. Deduct points from customer if points were applied to this booking
+    IF v_points_used > 0 THEN
+        UPDATE customer
+        SET accumulated_points = accumulated_points - v_points_used
+        WHERE user_id = v_customer_id;
+    END IF;
+
+    -- 3. Insert payment
     INSERT INTO payment (
         payment_method,
         status,
@@ -481,19 +584,75 @@ BEGIN
 
     SET p_payment_id = LAST_INSERT_ID();
 
-    -- 3. Update booking
+    -- 4. Update booking status
     UPDATE booking
     SET status = 'Paid'
     WHERE id = p_booking_id;
 
-    -- 4. Update seats
+    -- 5. Update seats
     UPDATE showtime_seat
     SET status = 'Booked'
     WHERE booking_id = p_booking_id
       AND status = 'Held';
 
-    -- 5. Update membership
-    CALL sp_update_customer_membership(v_customer_id, p_total_amount);
+    -- 6. Calculate and store points earned for this booking
+    -- Points are earned based on the ACTUAL amount paid (final_amount)
+    -- after all discounts (coupon, points) are applied.
+    
+    -- Calculate final amount (actual amount paid by customer)
+    CALL sp_calculate_final_amount(
+        p_booking_id,
+        v_base_seat_price,
+        v_fwb_price,
+        v_subtotal,
+        v_coupon_discount,
+        v_box_office_discount,
+        v_concession_discount,
+        v_points_discount,
+        v_membership_tier,
+        v_coupon_type,
+        v_final_amount
+    );
+    
+    -- Get customer's membership tier and point rates
+    SELECT c.membership_name,
+           m.box_office_point_rate,
+           m.concession_point_rate
+    INTO v_membership_tier,
+         v_ticket_rate,
+         v_fnb_rate
+    FROM customer c
+    JOIN membership m ON m.tier_name = c.membership_name
+    WHERE c.user_id = v_customer_id
+    LIMIT 1;
+    
+    -- Calculate actual payment for box office and concession separately
+    -- Split final_amount proportionally based on original prices
+    IF v_subtotal > 0 THEN
+        -- Calculate the proportion of each component
+        SET v_ticket_amount = v_final_amount * (v_base_seat_price / v_subtotal);
+        SET v_fnb_amount = v_final_amount * (v_fwb_price / v_subtotal);
+        
+        -- Calculate points for each component with its respective rate
+        SET v_ticket_points = fn_calculate_points(v_ticket_amount, v_ticket_rate);
+        SET v_fnb_points = fn_calculate_points(v_fnb_amount, v_fnb_rate);
+        SET v_total_points = v_ticket_points + v_fnb_points;
+    ELSE
+        SET v_total_points = 0;
+    END IF;
+    
+    -- Update customer membership with actual spent amount
+    IF v_final_amount > 0 THEN
+        UPDATE customer
+        SET total_spent = total_spent + v_final_amount,
+            accumulated_points = accumulated_points + v_total_points
+        WHERE user_id = v_customer_id;
+    END IF;
+    
+    -- Store calculated points in booking table
+    UPDATE booking
+    SET points_earned = v_total_points
+    WHERE id = p_booking_id;
 
     COMMIT;
 END$$
@@ -921,19 +1080,47 @@ DELIMITER ;
 DROP PROCEDURE IF EXISTS sp_get_customer_bookings;
 DELIMITER $$
 CREATE DEFINER="avnadmin"@"%" PROCEDURE "sp_get_customer_bookings"(
-    IN p_customer_id INT
+    IN p_customer_id INT,
+    IN p_limit INT,
+    IN p_offset INT
 )
 BEGIN
     DECLARE done INT DEFAULT FALSE;
     DECLARE v_booking_id BIGINT;
+    DECLARE v_created_time DATETIME;
     DECLARE v_final_amount DECIMAL(10,2);
+    DECLARE v_total_count INT DEFAULT 0;
     
     DECLARE cur CURSOR FOR 
-        SELECT DISTINCT b.id 
-        FROM booking b 
-        WHERE b.customer_id = p_customer_id;
+        SELECT DISTINCT b.id, b.created_time_at
+        FROM booking b
+        LEFT JOIN (
+            SELECT booking_id, st_id, MIN(seat_id) as first_seat_id
+            FROM showtime_seat
+            WHERE booking_id IS NOT NULL
+            GROUP BY booking_id, st_id
+        ) ss_first ON ss_first.booking_id = b.id
+        LEFT JOIN showtime st ON ss_first.st_id = st.id
+        WHERE b.customer_id = p_customer_id
+          AND st.id IS NOT NULL
+        ORDER BY b.created_time_at DESC
+        LIMIT p_limit OFFSET p_offset;
     
     DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+    
+    -- Get total count for pagination
+    SELECT COUNT(DISTINCT b.id)
+    INTO v_total_count
+    FROM booking b
+    LEFT JOIN (
+        SELECT booking_id, st_id, MIN(seat_id) as first_seat_id
+        FROM showtime_seat
+        WHERE booking_id IS NOT NULL
+        GROUP BY booking_id, st_id
+    ) ss_first ON ss_first.booking_id = b.id
+    LEFT JOIN showtime st ON ss_first.st_id = st.id
+    WHERE b.customer_id = p_customer_id
+      AND st.id IS NOT NULL;
 
     -- Temporary table to store calculated amounts
     DROP TEMPORARY TABLE IF EXISTS temp_booking_amounts;
@@ -945,7 +1132,7 @@ BEGIN
     -- Calculate final amount for each booking
     OPEN cur;
     read_loop: LOOP
-        FETCH cur INTO v_booking_id;
+        FETCH cur INTO v_booking_id, v_created_time;
         IF done THEN
             LEAVE read_loop;
         END IF;
@@ -960,6 +1147,7 @@ BEGIN
             @coupon_type,
             @box_office_discount,
             @concession_discount,
+            @points_discount,
             @membership_tier,
             @final_amount
         );
@@ -1012,7 +1200,7 @@ BEGIN
         -- Use calculated final amount (after all discounts)
         COALESCE(tba.final_amount, 0) as totalAmount
     FROM booking b
-    LEFT JOIN temp_booking_amounts tba ON tba.booking_id = b.id
+    INNER JOIN temp_booking_amounts tba ON tba.booking_id = b.id
     LEFT JOIN (
         -- Get one showtime_seat per booking to find showtime info
         SELECT booking_id, st_id, MIN(seat_id) as first_seat_id
@@ -1025,9 +1213,14 @@ BEGIN
     -- Join auditorium to get theater_id
     LEFT JOIN auditorium au ON st.au_number = au.number AND st.au_theater_id = au.theater_id
     LEFT JOIN theater t ON au.theater_id = t.id
-    WHERE b.customer_id = p_customer_id
-      AND st.id IS NOT NULL  -- Only return bookings with valid showtime info
     ORDER BY b.created_time_at DESC;
+
+    -- Return pagination info as second result set
+    SELECT 
+        v_total_count as totalCount,
+        p_limit as `limit`,
+        p_offset as `offset`,
+        IF(p_offset + p_limit < v_total_count, 1, 0) as hasMore;
 
     -- Cleanup
     DROP TEMPORARY TABLE IF EXISTS temp_booking_amounts;
@@ -1099,11 +1292,20 @@ BEGIN
       AND date_expired >= CURDATE()
       AND balance > 0;
     
-    -- Get total bookings
-    SELECT COUNT(*)
+    -- Get total bookings (only count bookings with valid showtime)
+    -- Same logic as sp_get_customer_bookings
+    SELECT COUNT(DISTINCT b.id)
     INTO v_total_bookings
-    FROM booking
-    WHERE customer_id = p_customer_id;
+    FROM booking b
+    LEFT JOIN (
+        SELECT booking_id, st_id, MIN(seat_id) as first_seat_id
+        FROM showtime_seat
+        WHERE booking_id IS NOT NULL
+        GROUP BY booking_id, st_id
+    ) ss_first ON ss_first.booking_id = b.id
+    LEFT JOIN showtime st ON ss_first.st_id = st.id
+    WHERE b.customer_id = p_customer_id
+      AND st.id IS NOT NULL;
     
     -- Return stats as first result set
     SELECT 
@@ -1190,10 +1392,13 @@ DELIMITER ;
 DROP PROCEDURE IF EXISTS sp_get_customer_points;
 DELIMITER $$
 CREATE DEFINER="avnadmin"@"%" PROCEDURE "sp_get_customer_points"(
-    IN p_customer_id INT
+    IN p_customer_id INT,
+    IN p_limit INT,
+    IN p_offset INT
 )
 BEGIN
     DECLARE v_total_points INT DEFAULT 0;
+    DECLARE v_total_count INT DEFAULT 0;
     
     -- Get total accumulated points
     SELECT COALESCE(accumulated_points, 0)
@@ -1201,57 +1406,84 @@ BEGIN
     FROM customer
     WHERE user_id = p_customer_id;
     
-    -- Return total points as first result set
-    SELECT v_total_points AS totalPoints;
-    
-    -- Return point history as second result set
-    -- Point history is derived from bookings (points earned) and redeemed vouchers
+    -- Count total history records for pagination
     SELECT 
-        activity_date AS date,
-        description,
-        points,
-        balance
+        (SELECT COUNT(*) FROM booking b 
+         WHERE b.customer_id = p_customer_id 
+         AND b.status = 'Paid' 
+         AND b.points_earned > 0) +
+        (SELECT COUNT(*) FROM booking b 
+         WHERE b.customer_id = p_customer_id 
+         AND b.status = 'Paid' 
+         AND b.points_used > 0) +
+        (SELECT COUNT(*) FROM refund r 
+         JOIN booking b ON r.booking_id = b.id 
+         WHERE b.customer_id = p_customer_id 
+         AND b.points_earned > 0 
+         AND r.status = 'Completed')
+    INTO v_total_count;
+    
+    -- Return total points and count as first result set
+    SELECT v_total_points AS totalPoints, v_total_count AS totalCount;
+    
+    -- Return point history directly without temp table (better performance)
+    -- Convert to Ho Chi Minh timezone (UTC+7) and sort by newest first
+    SELECT 
+        booking_id,
+        DATE_FORMAT(CONVERT_TZ(activity_date, '+00:00', '+07:00'), '%Y-%m-%d') AS date,
+        DATE_FORMAT(CONVERT_TZ(activity_date, '+00:00', '+07:00'), '%Y-%m-%d %H:%i:%s') AS datetime,
+        CASE 
+            WHEN points_change >= 0 THEN CONCAT('+', points_change)
+            ELSE CAST(points_change AS CHAR)
+        END AS points,
+        CASE 
+            WHEN activity_type = 'EARNED' THEN 'Points earned from payment'
+            WHEN activity_type = 'USED' THEN 'Points applied for payment'
+            WHEN activity_type = 'REFUNDED' THEN 'Points deducted from refund'
+            WHEN activity_type = 'REDEEMED' THEN 'Points redeemed for voucher'
+            ELSE 'Point activity'
+        END AS description
     FROM (
         -- Points earned from bookings
         SELECT 
+            b.id AS booking_id,
             b.created_time_at AS activity_date,
-            CONCAT('Booking #', b.id) AS description,
-            CONCAT('+', COALESCE(
-                CAST(
-                    (SELECT SUM(ss.price * 0.05) 
-                     FROM showtime_seat ss 
-                     WHERE ss.booking_id = b.id) AS SIGNED
-                ), 0)
-            ) AS points,
-            (
-                SELECT accumulated_points 
-                FROM customer 
-                WHERE user_id = p_customer_id
-            ) AS balance,
-            1 AS sort_order
+            'EARNED' AS activity_type,
+            b.points_earned AS points_change
         FROM booking b
         WHERE b.customer_id = p_customer_id
-          AND b.status = 'confirmed'
+          AND b.status = 'Paid'
+          AND b.points_earned > 0
         
         UNION ALL
         
-        -- Points redeemed (from coupons with balance deducted)
+        -- Points used in bookings
         SELECT 
-            c.date_expired AS activity_date,
-            CONCAT('Redeemed voucher') AS description,
-            CONCAT('-', CAST(c.balance AS SIGNED)) AS points,
-            (
-                SELECT accumulated_points 
-                FROM customer 
-                WHERE user_id = p_customer_id
-            ) AS balance,
-            2 AS sort_order
-        FROM coupon c
-        WHERE c.customer_id = p_customer_id
-          AND c.balance < 0
-    ) AS point_activities
-    ORDER BY activity_date DESC, sort_order ASC
-    LIMIT 50;
+            b.id AS booking_id,
+            b.created_time_at AS activity_date,
+            'USED' AS activity_type,
+            -COALESCE(b.points_used, 0) AS points_change
+        FROM booking b
+        WHERE b.customer_id = p_customer_id
+          AND b.status = 'Paid'
+          AND b.points_used > 0
+        
+        UNION ALL
+        
+        -- Points deducted from refunds
+        SELECT 
+            r.booking_id,
+            r.created_time_at AS activity_date,
+            'REFUNDED' AS activity_type,
+            -COALESCE(b.points_earned, 0) AS points_change
+        FROM refund r
+        JOIN booking b ON r.booking_id = b.id
+        WHERE b.customer_id = p_customer_id
+          AND b.points_earned > 0
+          AND r.status = 'Completed'
+    ) AS point_history
+    ORDER BY activity_date DESC, booking_id DESC
+    LIMIT p_limit OFFSET p_offset;
 END$$
 DELIMITER ;
 
@@ -1275,8 +1507,6 @@ BEGIN
     -- Return 1 single row with membership card info
     SELECT 
         c.user_id AS customer_id,
-
-        CONCAT('BKinema ', c.membership_name, ' Member') AS membership_title,
         c.membership_name AS membership_tier,
 
         CONCAT(
@@ -1286,21 +1516,25 @@ BEGIN
             u.lname
         ) AS member_name,
 
-        -- Card Number (fake logic, stable per user)
+        -- Card Number: unique per user, based on user_id
+        -- Format: XXXX-XXXX-XXXX-XXXX (16 digits total)
+        -- First 4 digits: user_id padded with leading zeros
+        -- Remaining 12 digits: generated using hash-like calculation from user_id
         CONCAT(
             LPAD(c.user_id, 4, '0'), '-',
-            LPAD(MOD(c.user_id * 13, 10000), 4, '0'), '-',
-            LPAD(MOD(c.user_id * 37, 10000), 4, '0'), '-',
-            LPAD(MOD(c.user_id * 97, 10000), 4, '0')
+            LPAD(MOD(c.user_id * 7919, 10000), 4, '0'), '-',
+            LPAD(MOD(c.user_id * 4999 + 1000, 10000), 4, '0'), '-',
+            LPAD(MOD(c.user_id * 9973 + 5000, 10000), 4, '0')
         ) AS card_number,
 
         v_member_since AS member_since_date,
 
-        NULL AS valid_until_date,   -- Membership lifetime, no expiry
+        c.membership_valid_until AS valid_until_date,
 
-        m.box_office_discount,
-        m.concession_discount,
-        c.accumulated_points
+        m.box_office_point_rate,
+        m.concession_point_rate,
+        c.accumulated_points,
+        c.total_spent
 
     FROM customer c
     JOIN `User` u
@@ -2040,6 +2274,33 @@ BEGIN
 END$$
 DELIMITER ;
 
+-- Procedure: sp_reset_membership_cycle
+DROP PROCEDURE IF EXISTS sp_reset_membership_cycle;
+DELIMITER $$
+CREATE DEFINER="avnadmin"@"%" PROCEDURE "sp_reset_membership_cycle"()
+BEGIN
+  DECLARE v_next_june_1 DATE;
+  
+  -- Calculate next June 1st
+  SET v_next_june_1 = DATE(CONCAT(YEAR(CURDATE()) + 1, '-06-01'));
+  
+  -- Reset all customers
+  UPDATE customer c
+  JOIN `User` u ON u.id = c.user_id
+  SET 
+    -- Reset points and spent
+    c.accumulated_points = 0,
+    c.total_spent = 0,
+    -- Reset membership based on age
+    c.membership_name = CASE
+      WHEN u.birthday IS NOT NULL AND TIMESTAMPDIFF(YEAR, u.birthday, CURDATE()) < 22 THEN 'U22'
+      ELSE 'Member'
+    END,
+    -- Set next valid_until date
+    c.membership_valid_until = v_next_june_1;
+END$$
+DELIMITER ;
+
 -- Procedure: sp_send_gift
 DROP PROCEDURE IF EXISTS sp_send_gift;
 DELIMITER $$
@@ -2295,7 +2556,7 @@ BEGIN
             DELETE FROM fwb WHERE booking_id = p_booking_id;
         ELSE
             UPDATE fwb
-            SET quantity = v_fwb_count,
+            SET quantity = 1,
                 price    = v_total_fwb
             WHERE booking_id = p_booking_id;
         END IF;
@@ -2389,42 +2650,66 @@ DROP PROCEDURE IF EXISTS sp_update_customer_membership;
 DELIMITER $$
 CREATE DEFINER="avnadmin"@"%" PROCEDURE "sp_update_customer_membership"(
   IN p_customer_id BIGINT,
-  IN p_amount DECIMAL(10,2)
+  IN p_ticket_amount DECIMAL(10,2),
+  IN p_fnb_amount DECIMAL(10,2)
 )
 BEGIN
-  DECLARE v_birth_year INT;
+  DECLARE v_birthday DATE;
+  DECLARE v_age INT;
   DECLARE v_total_spent DECIMAL(12,2);
   DECLARE v_tier VARCHAR(255);
+  DECLARE v_ticket_points INT;
+  DECLARE v_fnb_points INT;
+  DECLARE v_total_points INT;
+  DECLARE v_ticket_rate DECIMAL(5,2);
+  DECLARE v_fnb_rate DECIMAL(5,2);
 
-  -- 1. Cộng thêm chi tiêu
-  UPDATE customer
-  SET accumulated_points = accumulated_points + p_amount
-  WHERE user_id = p_customer_id;
-
-  -- 2. Lấy năm sinh + tổng chi tiêu hiện tại
-  SELECT YEAR(u.birthday), c.accumulated_points
-  INTO v_birth_year, v_total_spent
+  -- Get customer's birthday and current total_spent
+  SELECT u.birthday, c.total_spent
+  INTO v_birthday, v_total_spent
   FROM customer c
   JOIN `User` u ON u.id = c.user_id
   WHERE c.user_id = p_customer_id;
 
-  -- 3. Xác định tier base theo năm sinh
-  IF v_birth_year >= 2002 THEN
+  -- Update total_spent
+  SET v_total_spent = v_total_spent + p_ticket_amount + p_fnb_amount;
+
+  -- Calculate age
+  IF v_birthday IS NOT NULL THEN
+    SET v_age = TIMESTAMPDIFF(YEAR, v_birthday, CURDATE());
+  ELSE
+    SET v_age = NULL;
+  END IF;
+
+  -- Determine membership tier based on total_spent and age
+  -- Priority: VIP/VVIP > U22 > Member
+  IF v_total_spent >= 8000000 THEN
+    SET v_tier = 'VVIP';
+  ELSEIF v_total_spent >= 4000000 THEN
+    SET v_tier = 'VIP';
+  ELSEIF v_age IS NOT NULL AND v_age < 22 THEN
     SET v_tier = 'U22';
   ELSE
     SET v_tier = 'Member';
   END IF;
 
-  -- 4. Đè VIP / VVIP nếu đủ chi tiêu
-  IF v_total_spent >= 8000000 THEN
-    SET v_tier = 'VVIP';
-  ELSEIF v_total_spent >= 4000000 THEN
-    SET v_tier = 'VIP';
-  END IF;
+  -- Get point rates for current membership tier
+  SELECT box_office_point_rate, concession_point_rate
+  INTO v_ticket_rate, v_fnb_rate
+  FROM membership
+  WHERE tier_name = v_tier
+  LIMIT 1;
 
-  -- 5. Cập nhật lại membership_name
+  -- Calculate points earned with rounding
+  SET v_ticket_points = fn_calculate_points(p_ticket_amount, v_ticket_rate);
+  SET v_fnb_points = fn_calculate_points(p_fnb_amount, v_fnb_rate);
+  SET v_total_points = v_ticket_points + v_fnb_points;
+
+  -- Update customer: total_spent, accumulated_points, membership_name
   UPDATE customer
-  SET membership_name = v_tier
+  SET total_spent = v_total_spent,
+      accumulated_points = accumulated_points + v_total_points,
+      membership_name = v_tier
   WHERE user_id = p_customer_id;
 END$$
 DELIMITER ;
