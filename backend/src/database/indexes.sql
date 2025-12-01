@@ -1,7 +1,7 @@
 -- ============================================
 -- Indexes
 -- Database: bkinema
--- Generated: 2025-11-30T09:44:40.536Z
+-- Generated: 2025-12-01T05:27:30.276Z
 -- ============================================
 -- Note: PRIMARY KEY and UNIQUE constraints are included in table structure
 -- This file contains all non-primary indexes for reference

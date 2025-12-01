@@ -71,7 +71,7 @@ export default function MovieDetailPage() {
   const getRatingColor = (rating) => {
     switch (rating) {
       case 'P': return 'bg-green-500';
-      case 'K': return 'bg-green-500';
+      case 'K': return 'bg-blue-500';
       case 'T13': return 'bg-yellow-500';
       case 'T16': return 'bg-orange-500';
       case 'T18': return 'bg-red-500';
@@ -250,10 +250,10 @@ export default function MovieDetailPage() {
 
               {/* Format Badges and Booking Button */}
               <div className="flex flex-wrap items-center gap-3 mb-6">
-                <span className="font-semibold text-gray-900">Rated:</span>
+                {/* <span className="font-semibold text-gray-900">Rated:</span>
                 <span className={`${getRatingColor(movie.ageRating)} text-white px-3 py-1 rounded font-bold`}>
                   {movie.ageRating}
-                </span>
+                </span> */}
                 <button
                   onClick={() => setShowBookingModal(true)}
                   className="ml-auto bg-primary hover:bg-secondary text-white px-8 py-3 rounded-lg font-bold text-lg transition-colors shadow-lg"
