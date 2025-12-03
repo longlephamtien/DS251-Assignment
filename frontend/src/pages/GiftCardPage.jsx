@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Icon from '../components/common/Icon';
 
 const giftCardCategories = [
@@ -6,52 +6,45 @@ const giftCardCategories = [
     id: 'christmas',
     name: 'Christmas 2025',
     cards: [
-      { id: 1, title: 'Christmas Joy', design: 'christmas-1', price: '100,000' },
-      { id: 2, title: 'Winter Wonderland', design: 'christmas-2', price: '200,000' },
-      { id: 3, title: 'Holiday Magic', design: 'christmas-3', price: '300,000' },
-      { id: 4, title: 'Festive Cinema', design: 'christmas-4', price: '500,000' },
+      { id: 1, title: 'Christmas Joy', design: 'christmas-1', image: 'christmas-1.png' },
+      { id: 2, title: 'Winter Wonderland', design: 'christmas-2', image: 'christmas-2.png' },
+      { id: 3, title: 'Holiday Magic', design: 'christmas-3', image: 'christmas-3.png' },
+      { id: 4, title: 'Festive Cinema', design: 'christmas-4', image: 'christmas-4.png' },
     ]
   },
   {
     id: 'new-collection',
     name: 'New Collection',
     cards: [
-      { id: 5, title: 'Modern Cinema', design: 'new-1', price: '100,000' },
-      { id: 6, title: 'Urban Style', design: 'new-2', price: '200,000' },
-      { id: 7, title: 'Premium Experience', design: 'new-3', price: '300,000' },
+      { id: 5, title: 'Modern Cinema', design: 'new-1', image: 'new-1.png' },
+      { id: 6, title: 'Urban Style', design: 'new-2', image: 'new-2.png' },
+      { id: 7, title: 'Premium Experience', design: 'new-3', image: 'new-3.png' },
+      { id: 8, title: 'Elite Collection', design: 'new-4', image: 'new-4.png' },
     ]
   },
   {
     id: 'birthday',
     name: 'Birthday',
     cards: [
-      { id: 8, title: 'Birthday Celebration', design: 'birthday-1', price: '100,000' },
-      { id: 9, title: 'Party Time', design: 'birthday-2', price: '200,000' },
-      { id: 10, title: 'Special Day', design: 'birthday-3', price: '300,000' },
+      { id: 9, title: 'Birthday Celebration', design: 'birthday-1', image: 'birthday-1.png' },
+      { id: 10, title: 'Party Time', design: 'birthday-2', image: 'birthday-2.png' },
     ]
   },
   {
     id: 'thank-you',
     name: 'Thank You',
     cards: [
-      { id: 11, title: 'Grateful Heart', design: 'thanks-1', price: '100,000' },
-      { id: 12, title: 'Appreciation', design: 'thanks-2', price: '200,000' },
+      { id: 11, title: 'Grateful Heart', design: 'thank-1', image: 'thank-1.png' },
+      { id: 12, title: 'Appreciation', design: 'thank-2', image: 'thank-2.png' },
     ]
   },
   {
-    id: 'congratulations',
-    name: 'Congratulations',
+    id: 'romantic',
+    name: 'Romantic & Love',
     cards: [
-      { id: 13, title: 'Success', design: 'congrats-1', price: '100,000' },
-      { id: 14, title: 'Achievement', design: 'congrats-2', price: '200,000' },
-    ]
-  },
-  {
-    id: 'love',
-    name: 'Love & Romance',
-    cards: [
-      { id: 15, title: 'Movie Date', design: 'love-1', price: '100,000' },
-      { id: 16, title: 'Romantic Night', design: 'love-2', price: '200,000' },
+      { id: 13, title: 'Romantic Moments', design: 'romantic-1', image: 'romantic-1.png' },
+      { id: 14, title: 'Love Story', design: 'romantic-2', image: 'romantic-2.png' },
+      { id: 15, title: 'Date Night', design: 'romantic-3', image: 'romantic-3.png' },
     ]
   }
 ];
@@ -65,50 +58,158 @@ const amounts = [
 ];
 
 function GiftCardPreview({ card, amount }) {
-  const getGradient = (design) => {
-    const gradients = {
-      'christmas-1': 'from-red-500 via-green-500 to-red-600',
-      'christmas-2': 'from-blue-400 via-white to-blue-500',
-      'christmas-3': 'from-green-600 via-red-500 to-green-700',
-      'christmas-4': 'from-yellow-400 via-red-500 to-green-500',
-      'new-1': 'from-primary via-secondary to-primary',
-      'new-2': 'from-gray-700 via-gray-900 to-gray-800',
-      'new-3': 'from-accent via-yellow-500 to-accent',
-      'birthday-1': 'from-pink-400 via-purple-500 to-pink-500',
-      'birthday-2': 'from-yellow-400 via-pink-500 to-purple-500',
-      'birthday-3': 'from-blue-400 via-pink-400 to-purple-500',
-      'thanks-1': 'from-green-400 via-teal-500 to-blue-500',
-      'thanks-2': 'from-orange-400 via-red-500 to-pink-500',
-      'congrats-1': 'from-yellow-400 via-orange-500 to-red-500',
-      'congrats-2': 'from-purple-400 via-pink-500 to-red-500',
-      'love-1': 'from-pink-500 via-red-500 to-pink-600',
-      'love-2': 'from-red-400 via-pink-500 to-purple-500',
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    
+    const getCardImage = () => {
+      if (card.image) {
+        try {
+          return require(`../assets/media/gift/${card.image}`);
+        } catch (error) {
+          console.warn(`Gift card image not found: ${card.image}`);
+          return null;
+        }
+      }
+      return null;
     };
-    return gradients[design] || 'from-primary to-secondary';
+
+    const cardImage = getCardImage();
+
+    img.onload = () => {
+      // Set high resolution canvas size
+      const scale = 2; // Increase resolution
+      canvas.width = 1600 * scale;
+      canvas.height = 1000 * scale;
+      
+      // Scale context for high DPI
+      ctx.scale(scale, scale);
+
+      // Draw the background image
+      ctx.drawImage(img, 0, 0, 1600, 1000);
+
+      // Add gradient overlay from bottom
+      const gradient = ctx.createLinearGradient(0, 500, 0, 1000);
+      gradient.addColorStop(0, 'rgba(0, 0, 0, 0.1)');
+      gradient.addColorStop(1, 'rgba(0, 0, 0, 0.6)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 1600, 1000);
+
+      // Measure text to make badge adaptive
+      const amountText = `${Math.round(amount).toLocaleString()} VND`;
+      ctx.font = 'bold 72px Verdana';
+      const amountMetrics = ctx.measureText(amountText);
+      const amountWidth = amountMetrics.width;
+      
+      // Calculate badge dimensions based on text with equal padding
+      const horizontalPadding = 40;
+      const badgeWidth = amountWidth + (horizontalPadding * 2);
+      const badgeHeight = 180; // Increased height from 140 to 180
+      const badgeX = 60;
+      const badgeY = 940 - badgeHeight;
+      
+      // Badge background
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.lineWidth = 3;
+      roundRect(ctx, badgeX, badgeY, badgeWidth, badgeHeight, 12);
+      ctx.fill();
+      ctx.stroke();
+
+      // Badge text - "Gift Card Value"
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.font = 'bold 36px Verdana';
+      ctx.fillText('Gift Value', badgeX + horizontalPadding, badgeY + 65);
+
+      // Badge text - Amount (larger) - centered within badge
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 72px Verdana';
+      ctx.fillText(amountText, badgeX + horizontalPadding, badgeY + 140);
+      
+
+      // Draw info text at bottom right (smaller)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.font = '24px Verdana';
+      ctx.textAlign = 'right';
+      ctx.fillText('Valid for 12 months', 1540, 910);
+      ctx.fillText('Use at any BKinema', 1540, 940);
+      ctx.textAlign = 'left'; // Reset alignment
+    };
+
+    if (cardImage) {
+      img.src = cardImage;
+    } else {
+      // Fallback gradient if no image
+      const scale = 2;
+      canvas.width = 1600 * scale;
+      canvas.height = 1000 * scale;
+      ctx.scale(scale, scale);
+      
+      const gradient = ctx.createLinearGradient(0, 0, 1600, 1000);
+      gradient.addColorStop(0, '#6366f1');
+      gradient.addColorStop(1, '#8b5cf6');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 1600, 1000);
+    }
+  }, [card, amount]);
+
+  // Helper function to draw rounded rectangles
+  const roundRect = (ctx, x, y, width, height, radius) => {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
   };
 
   return (
-    <div className="relative aspect-[16/10] rounded-lg overflow-hidden shadow-xl">
-      <div className={`absolute inset-0 bg-gradient-to-br ${getGradient(card.design)}`}></div>
-      <div className="relative h-full p-6 flex flex-col justify-between text-white">
-        <div>
-          <p className="text-sm font-semibold mb-1">BKinema Gift Card</p>
-          <h3 className="text-2xl font-bold">{card.title}</h3>
-        </div>
-        <div className="space-y-2">
-          <div className="bg-white/20 backdrop-blur-sm rounded px-3 py-1 inline-block">
-            <p className="text-xs">Card Value</p>
-            <p className="text-2xl font-bold">{Math.round(amount).toLocaleString()} VND</p>
-          </div>
-        </div>
-        <div className="flex justify-between items-end">
-          <div className="text-xs opacity-75">
-            <p>Valid for 12 months</p>
-            <p>Use at any BKinema</p>
-          </div>
-          <Icon name="film" className="w-12 h-12 opacity-50" />
-        </div>
-      </div>
+    <div className="relative aspect-[16/10] rounded-lg overflow-hidden shadow-xl bg-gray-900">
+      <canvas
+        ref={canvasRef}
+        className="w-full h-full"
+        style={{ imageRendering: 'auto' }}
+      />
+    </div>
+  );
+}
+
+function ThemePreview({ card }) {
+  const getCardImage = () => {
+    if (card.image) {
+      try {
+        return require(`../assets/media/gift/${card.image}`);
+      } catch (error) {
+        console.warn(`Gift card image not found: ${card.image}`);
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const cardImage = getCardImage();
+
+  return (
+    <div className="relative aspect-[16/10] rounded-lg overflow-hidden">
+      {cardImage ? (
+        <img
+          src={cardImage}
+          alt={card.title}
+          className="w-full h-full object-cover"
+        />
+      ) : (
+        <div className="w-full h-full bg-gradient-to-br from-primary to-secondary"></div>
+      )}
     </div>
   );
 }
@@ -117,57 +218,51 @@ export default function GiftCardPage() {
   const [selectedCategory, setSelectedCategory] = useState('christmas');
   const [selectedCard, setSelectedCard] = useState(giftCardCategories[0].cards[0]);
   const [selectedAmount, setSelectedAmount] = useState(amounts[0]);
+  const [customAmount, setCustomAmount] = useState('');
+  const [isCustomAmount, setIsCustomAmount] = useState(false);
 
   const currentCategory = giftCardCategories.find(cat => cat.id === selectedCategory);
+  
+  const displayAmount = isCustomAmount && customAmount ? parseInt(customAmount) || 0 : selectedAmount.value;
+  
+  const handleCustomAmountChange = (e) => {
+    const value = e.target.value.replace(/[^0-9]/g, '');
+    setCustomAmount(value);
+    if (value) {
+      setIsCustomAmount(true);
+    }
+  };
+  
+  const handlePresetAmountClick = (amount) => {
+    setSelectedAmount(amount);
+    setIsCustomAmount(false);
+    setCustomAmount('');
+  };
 
   return (
     <div className="bg-background min-h-screen">
-      {/* Hero Section */}
-      <div className="bg-gradient-to-r from-primary to-secondary text-white py-16">
+      {/* Hero Section - Consistent with Movies Page */}
+      <div className="bg-white py-12">
         <div className="max-w-[1200px] mx-auto px-4">
-          <h1 className="text-4xl md:text-5xl font-bold mb-4">BKinema Gift Cards</h1>
-          <p className="text-lg md:text-xl opacity-90">
-            The perfect gift for movie lovers
+          <div className="relative mb-8">
+            <h2 className="text-3xl md:text-5xl font-bold text-center tracking-wider relative inline-block w-full">
+              <span className="relative z-10 bg-white px-6 text-gray-800" style={{
+                textShadow: '2px 2px 0px #e5e5e5, 4px 4px 0px #d4d4d4',
+                letterSpacing: '0.05em'
+              }}>
+                BKINEMA GIFT CARDS
+              </span>
+              <div className="absolute top-1/2 left-0 right-0 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent -z-0" />
+            </h2>
+          </div>
+          <p className="text-center text-text-sub">
+            Your prepaid card at BKinema
           </p>
         </div>
       </div>
 
       {/* Main Content */}
       <div className="max-w-[1200px] mx-auto px-4 py-12">
-        {/* Introduction */}
-        <section className="mb-12">
-          <div className="bg-white rounded-lg shadow-card p-8 md:p-12">
-            <h2 className="text-3xl font-bold text-primary mb-6">What is a BKinema Gift Card?</h2>
-            <p className="text-lg text-text-main leading-relaxed mb-6">
-              BKinema Gift Cards are prepaid cards that can be used to purchase movie tickets, 
-              concession items, and merchandise at all BKinema cinemas. Available as physical cards 
-              or digital eGift cards, they make perfect gifts for any occasion.
-            </p>
-            <div className="grid md:grid-cols-3 gap-6">
-              <div className="flex items-start gap-3">
-                <Icon name="ticket" className="w-10 h-10 text-primary" />
-                <div>
-                  <h4 className="font-semibold text-primary mb-1">Flexible Amounts</h4>
-                  <p className="text-text-sub text-sm">From 100,000 to 1,000,000 VND</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Icon name="calendar" className="w-10 h-10 text-primary" />
-                <div>
-                  <h4 className="font-semibold text-primary mb-1">12 Month Validity</h4>
-                  <p className="text-text-sub text-sm">Extend by topping up anytime</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="text-3xl">🎨</span>
-                <div>
-                  <h4 className="font-semibold text-primary mb-1">Beautiful Designs</h4>
-                  <p className="text-text-sub text-sm">Multiple themes available</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
 
         {/* Gift Card Selector */}
         <section className="mb-12">
@@ -210,7 +305,7 @@ export default function GiftCardPage() {
                         : 'hover:scale-105 shadow-card'
                     }`}
                   >
-                    <GiftCardPreview card={card} amount={selectedAmount.value} />
+                    <ThemePreview card={card} />
                   </button>
                 ))}
               </div>
@@ -218,13 +313,13 @@ export default function GiftCardPage() {
               {/* Amount Selection */}
               <div className="mt-6">
                 <h3 className="text-xl font-bold text-primary mb-4">Select Amount</h3>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-3 mb-3">
                   {amounts.map((amount) => (
                     <button
                       key={amount.value}
-                      onClick={() => setSelectedAmount(amount)}
+                      onClick={() => handlePresetAmountClick(amount)}
                       className={`py-3 px-4 rounded-lg font-semibold transition-all ${
-                        selectedAmount.value === amount.value
+                        !isCustomAmount && selectedAmount.value === amount.value
                           ? 'bg-primary text-white shadow-lg'
                           : 'bg-white text-text-main hover:bg-gray-100 shadow'
                       }`}
@@ -233,6 +328,27 @@ export default function GiftCardPage() {
                     </button>
                   ))}
                 </div>
+                
+                {/* Custom Amount Input */}
+                <div className="mt-4">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Or enter custom amount (VND):
+                  </label>
+                  <input
+                    type="text"
+                    value={customAmount}
+                    onChange={handleCustomAmountChange}
+                    placeholder="Enter amount (min 50,000)"
+                    className={`w-full px-4 py-3 rounded-lg border-2 transition-all ${
+                      isCustomAmount
+                        ? 'border-primary bg-primary/5'
+                        : 'border-gray-300 hover:border-gray-400'
+                    } focus:outline-none focus:border-primary`}
+                  />
+                  {customAmount && parseInt(customAmount) < 50000 && (
+                    <p className="text-red-500 text-xs mt-1">Minimum amount is 50,000 VND</p>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -240,7 +356,7 @@ export default function GiftCardPage() {
             <div className="bg-white rounded-lg shadow-card p-8">
               <h3 className="text-xl font-bold text-primary mb-4">Preview</h3>
               <div className="mb-6">
-                <GiftCardPreview card={selectedCard} amount={selectedAmount.value} />
+                <GiftCardPreview card={selectedCard} amount={displayAmount} />
               </div>
               
               <div className="space-y-4 mb-6">
@@ -254,7 +370,7 @@ export default function GiftCardPage() {
                 </div>
                 <div className="flex justify-between text-lg font-bold text-primary border-t pt-4">
                   <span>Total:</span>
-                  <span>{selectedAmount.label}</span>
+                  <span>{displayAmount.toLocaleString()} VND</span>
                 </div>
               </div>
 

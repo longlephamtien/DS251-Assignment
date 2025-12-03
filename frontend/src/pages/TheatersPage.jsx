@@ -255,16 +255,30 @@ export default function TheatersPage() {
   };
 
   return (
-    <div className="bg-background min-h-screen py-12">
-      <div className="max-w-[1200px] mx-auto px-4">
+    <div className="bg-white min-h-screen">
+      <div className="bg-white py-12">
+        <div className="max-w-[1200px] mx-auto px-4">
+          {/* Section Header */}
+          <div className="relative mb-8">
+            <h2 className="text-3xl md:text-5xl font-bold text-center tracking-wider relative inline-block w-full">
+              <span className="relative z-10 bg-white px-6 text-gray-800" style={{
+                textShadow: '2px 2px 0px #e5e5e5, 4px 4px 0px #d4d4d4',
+                letterSpacing: '0.05em'
+              }}>
+                BKINEMA CINEMAS
+              </span>
+              <div className="absolute top-1/2 left-0 right-0 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent -z-0" />
+            </h2>
+          </div>
+          
+          <p className="text-center text-text-sub mb-8">
+            Find your nearest theater
+          </p>
+
         {/* Main Container Box - Only for Cities and Theaters */}
         <div className="bg-white rounded-lg shadow-lg overflow-hidden border-4 border-primary mb-8">
           {/* City Selection Section */}
           <div className="bg-gray-50 p-8">
-            <h1 className="text-2xl md:text-3xl font-bold text-center text-gray-900 mb-6 tracking-wider">
-              BKINEMA CINEMAS
-            </h1>
-
             {/* Cities Grid */}
             <div className="grid grid-cols-5 gap-x-5 gap-y-3">
               {cities.map((city, idx) => (
@@ -341,7 +355,7 @@ export default function TheatersPage() {
             {/* Section Header - Same style as Movie Selection */}
             <div className="relative mb-10">
               <h2 className="text-3xl md:text-5xl font-bold text-center tracking-wider relative inline-block w-full">
-                <span className="relative z-10 bg-background px-6 text-gray-800" style={{
+                <span className="relative z-10 bg-white px-6 text-gray-800" style={{
                   textShadow: '2px 2px 0px #e5e5e5, 4px 4px 0px #d4d4d4',
                   letterSpacing: '0.05em'
                 }}>
@@ -640,6 +654,7 @@ export default function TheatersPage() {
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );
