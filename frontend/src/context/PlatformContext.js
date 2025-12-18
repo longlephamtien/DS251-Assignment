@@ -61,7 +61,8 @@ export function PlatformProvider({ children, showMarker = true }) {
         <div className="screen-marker" aria-hidden>
           {os} · {screen}
         </div>
-      )}
+      )
+      }
     </PlatformContext.Provider>
   );
 }

@@ -26,15 +26,15 @@ export class MembershipService {
 
       return {
         customerId: parseInt(cardData.customer_id),
-        membershipTitle: cardData.membership_title,
         tierName: cardData.membership_tier,
         memberName: cardData.member_name,
         cardNumber: cardData.card_number,
         memberSinceDate: cardData.member_since_date,
         expiryDate: cardData.valid_until_date,
-        boxOfficeDiscount: parseFloat(cardData.box_office_discount || 0),
-        concessionDiscount: parseFloat(cardData.concession_discount || 0),
+        boxOfficePointRate: parseFloat(cardData.box_office_point_rate || 0),
+        concessionPointRate: parseFloat(cardData.concession_point_rate || 0),
         accumulatedPoints: parseFloat(cardData.accumulated_points || 0),
+        totalSpent: parseFloat(cardData.total_spent || 0),
       };
     } catch (error: any) {
       if (error instanceof NotFoundException) {

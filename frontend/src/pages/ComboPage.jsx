@@ -164,7 +164,7 @@ export default function ComboPage() {
                   {bookingInfo.theater} | {bookingInfo.cinema} | Remaining ({bookingInfo.remaining?.current || 0}/{bookingInfo.remaining?.total || 0})
                 </h2>
                 <p className="text-sm text-gray-700">
-                  {bookingInfo.date} {bookingInfo.showtime} ~ {bookingInfo.date} {bookingInfo.endTime}
+                  {bookingInfo.date} {bookingInfo.showtime} ~ {bookingInfo.crossesMidnight ? bookingInfo.endDate : bookingInfo.date} {bookingInfo.endTime}
                 </p>
               </div>
             </div>
@@ -200,21 +200,21 @@ export default function ComboPage() {
 
                     {/* Combo Info */}
                     <div className="flex-1">
-                      <h3 className="font-bold text-lg mb-1 text-gray-900">{combo.name}</h3>
-                      <p className="text-sm text-gray-600 mb-2">{combo.items}</p>
-                      <p className="text-xs text-gray-500 line-clamp-2 mb-2">{combo.description}</p>
+                      <h3 className="font-bold mb-1 text-gray-900">{combo.name}</h3>
+                      {/* <p className="text-sm text-gray-600 mb-2">{combo.items}</p> */}
+                      <p className="text-sm text-gray-500 line-clamp-2 mb-2">{combo.description}</p>
 
                       {/* Price */}
                       <div className="flex items-baseline gap-2">
-                        <span className="text-lg font-bold text-grey-600">₫{combo.price.toLocaleString()}</span>
+                        <span className="text-lg font-bold text-grey-600">₫{Math.round(combo.price).toLocaleString()}</span>
                         {combo.originalPrice && (
-                          <span className="text-sm text-gray-400 line-through">₫{combo.originalPrice.toLocaleString()}</span>
+                          <span className="text-sm text-gray-400 line-through">₫{Math.round(combo.originalPrice).toLocaleString()}</span>
                         )}
                       </div>
                     </div>
 
                     {/* Quantity Controls */}
-                    <div className="flex flex-col items-center justify-center gap-2">
+                    <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleQuantityChange(combo.id, -1)}
                         disabled={!selectedCombos[combo.id]}
@@ -278,7 +278,9 @@ export default function ComboPage() {
                   <p className="text-sm text-gray-300">Theater</p>
                   <p className="font-bold">{bookingInfo?.theater || 'Theater'}</p>
                   <p className="text-sm text-gray-300">Showtimes</p>
-                  <p className="font-bold">{bookingInfo?.showtime || '00:00'}, {bookingInfo?.date || date}</p>
+                  <p className="font-bold">
+                    {bookingInfo?.showtime || '00:00'}, {bookingInfo?.date || date}
+                  </p>
                   <p className="text-sm text-gray-300">Screen</p>
                   <p className="font-bold">{bookingInfo?.movie?.screen || 'Cinema'}</p>
                   <p className="text-sm text-gray-300">Selected Seats</p>
@@ -288,11 +290,11 @@ export default function ComboPage() {
                 {/* Pricing */}
                 <div className="text-right min-w-[150px]">
                   <p className="text-sm text-gray-300">Movie</p>
-                  <p className="font-bold">₫{seatTotal.toFixed(2)}</p>
+                  <p className="font-bold">₫{Math.round(seatTotal).toLocaleString()}</p>
                   <p className="text-sm text-gray-300">Combo</p>
-                  <p className="font-bold">₫{comboTotal.toFixed(2)}</p>
+                  <p className="font-bold">₫{Math.round(comboTotal).toLocaleString()}</p>
                   <p className="text-sm text-gray-300 mt-2">Total</p>
-                  <p className="font-bold text-xl text-yellow-400">₫{totalPrice.toFixed(2)}</p>
+                  <p className="font-bold text-xl text-yellow-400">₫{Math.round(totalPrice).toLocaleString()}</p>
                 </div>
 
                 {/* Next Button */}

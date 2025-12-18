@@ -1,7 +1,7 @@
 -- ============================================
 -- Database Schema (Table Structures)
 -- Database: bkinema
--- Generated: 2025-11-28T16:54:39.978Z
+-- Generated: 2025-12-01T05:27:25.026Z
 -- ============================================
 -- This file contains CREATE TABLE statements for all tables
 -- ============================================
@@ -63,6 +63,8 @@ CREATE TABLE "booking" (
   "booking_method" varchar(255) NOT NULL,
   "is_gift" tinyint(1) NOT NULL DEFAULT '0',
   "live_direction" varchar(255) DEFAULT NULL,
+  "points_earned" int NOT NULL DEFAULT '0',
+  "points_used" int NOT NULL DEFAULT '0',
   "customer_id" bigint DEFAULT NULL,
   "staff_id" bigint DEFAULT NULL,
   PRIMARY KEY ("id"),
@@ -113,12 +115,15 @@ DROP TABLE IF EXISTS customer;
 CREATE TABLE "customer" (
   "user_id" bigint NOT NULL,
   "accumulated_points" int NOT NULL DEFAULT '0',
+  "total_spent" decimal(12,2) NOT NULL DEFAULT '0.00',
   "membership_name" varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  "membership_valid_until" date DEFAULT NULL,
   PRIMARY KEY ("user_id"),
   KEY "fk_customer_membership" ("membership_name"),
   CONSTRAINT "fk_customer_membership" FOREIGN KEY ("membership_name") REFERENCES "membership" ("tier_name") ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT "fk_customer_user" FOREIGN KEY ("user_id") REFERENCES "User" ("id"),
-  CONSTRAINT "customer_chk_1" CHECK ((`accumulated_points` >= 0))
+  CONSTRAINT "customer_chk_1" CHECK ((`accumulated_points` >= 0)),
+  CONSTRAINT "customer_chk_2" CHECK ((`total_spent` >= 0))
 );
 
 -- Table: director
@@ -194,12 +199,12 @@ CREATE TABLE "give" (
 DROP TABLE IF EXISTS membership;
 CREATE TABLE "membership" (
   "tier_name" varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  "uk_membership_min_point" int NOT NULL,
-  "box_office_discount" decimal(5,2) NOT NULL,
-  "concession_discount" decimal(5,2) NOT NULL,
+  "min_spent" decimal(12,2) NOT NULL DEFAULT '0.00',
+  "box_office_point_rate" decimal(5,2) NOT NULL DEFAULT '0.00',
+  "concession_point_rate" decimal(5,2) NOT NULL DEFAULT '0.00',
   PRIMARY KEY ("tier_name"),
-  CONSTRAINT "chk_membership_box" CHECK (((`box_office_discount` >= 0) and (`box_office_discount` <= 100))),
-  CONSTRAINT "chk_membership_con" CHECK (((`concession_discount` >= 0) and (`concession_discount` <= 100)))
+  CONSTRAINT "chk_membership_box_rate" CHECK (((`box_office_point_rate` >= 0) and (`box_office_point_rate` <= 100))),
+  CONSTRAINT "chk_membership_con_rate" CHECK (((`concession_point_rate` >= 0) and (`concession_point_rate` <= 100)))
 );
 
 -- Table: movie

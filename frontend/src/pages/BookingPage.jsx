@@ -99,6 +99,23 @@ export default function BookingPage() {
               return `${hours}:${minutes}`;
             };
 
+            // Check if showtime crosses midnight
+            const startTime = formatTime(showtimeData.start_time);
+            const endTime = formatTime(showtimeData.end_time);
+            const [startHour, startMin] = startTime.split(':').map(Number);
+            const [endHour, endMin] = endTime.split(':').map(Number);
+            const startMinutes = startHour * 60 + startMin;
+            const endMinutes = endHour * 60 + endMin;
+            const crossesMidnight = endMinutes < startMinutes;
+
+            // Calculate end date if crosses midnight
+            let endDate = formattedDate;
+            if (crossesMidnight) {
+              const endDateObj = new Date(dateObj);
+              endDateObj.setDate(endDateObj.getDate() + 1);
+              endDate = `${endDateObj.getDate().toString().padStart(2, '0')}/${(endDateObj.getMonth() + 1).toString().padStart(2, '0')}/${endDateObj.getFullYear()}`;
+            }
+
             setBookingInfo(prev => ({
               ...prev,
               theater: theaterData.name,
@@ -107,9 +124,11 @@ export default function BookingPage() {
                 current: auditoriumData.capacity,
                 total: auditoriumData.capacity
               },
-              showtime: formatTime(showtimeData.start_time),
+              showtime: startTime,
               date: formattedDate,
-              endTime: formatTime(showtimeData.end_time),
+              endTime: endTime,
+              endDate: endDate,
+              crossesMidnight: crossesMidnight,
               movie: {
                 ...prev.movie,
                 title: movieData.name,
@@ -232,9 +251,95 @@ export default function BookingPage() {
       return {
         row: row,
         seats: sortedSeats.map(s => `${s.row_char}${s.column_number}`),
-        type: sortedSeats[0].type.toLowerCase()
+        type: sortedSeats[0].type.toLowerCase(),
+        rawSeats: sortedSeats // Keep raw seat data for layout calculation
       };
     }).sort((a, b) => a.row.localeCompare(b.row));
+  };
+
+  // Helper function to calculate seat groups by type for horizontal spacing
+  const getSeatTypeGroups = (rawSeats) => {
+    if (!rawSeats || rawSeats.length === 0) return [];
+    
+    const groups = [];
+    let currentType = rawSeats[0].type;
+    let currentGroup = [];
+    
+    rawSeats.forEach((seat, idx) => {
+      if (seat.type === currentType) {
+        currentGroup.push(seat);
+      } else {
+        groups.push({ type: currentType, seats: currentGroup });
+        currentType = seat.type;
+        currentGroup = [seat];
+      }
+      
+      if (idx === rawSeats.length - 1) {
+        groups.push({ type: currentType, seats: currentGroup });
+      }
+    });
+    
+    return groups;
+  };
+
+  // Helper function to get sections for a seat type group (IMAX specific)
+  const getSeatTypeGroupSections = (groupSeats, seatType) => {
+    const totalSeats = groupSeats.length;
+    const maxSideSeats = 2;
+    
+    // Calculate middle size: total - (2 left + 2 right) = total - 4
+    const middle = Math.max(totalSeats - (maxSideSeats * 2), 0);
+    
+    if (totalSeats <= middle) {
+      // All seats go to middle (4 seats or fewer)
+      return { left: 0, middle: totalSeats, right: 0 };
+    } else {
+      // Distribute remaining seats to left and right (max 2 each)
+      const remaining = totalSeats - middle;
+      const left = Math.min(Math.floor(remaining / 2), maxSideSeats);
+      const right = Math.min(remaining - left, maxSideSeats);
+      
+      return { left, middle, right };
+    }
+  };
+
+  // Helper function to calculate vertical sections (modulo 3)
+  // For IMAX: middle section should be the same for all rows (based on max row)
+  // Constraint: left and right sides should not exceed 2 seats each for standard seats
+  const getVerticalSections = (totalSeats, isIMAX = false, maxSeats = null) => {
+    if (isIMAX && maxSeats) {
+      // For IMAX: left and right should be max 2 seats each
+      // Middle takes the rest
+      const maxSideSeats = 2;
+      
+      // Calculate fixed middle size: total - (2 left + 2 right) = total - 4
+      const fixedMiddle = Math.max(maxSeats - (maxSideSeats * 2), 0);
+      
+      // For current row, distribute seats
+      if (totalSeats <= fixedMiddle) {
+        // All seats go to middle (rare case)
+        return { left: 0, middle: totalSeats, right: 0 };
+      } else {
+        // Distribute remaining seats to left and right (max 2 each)
+        const remaining = totalSeats - fixedMiddle;
+        const leftSize = Math.min(Math.floor(remaining / 2), maxSideSeats);
+        const rightSize = Math.min(remaining - leftSize, maxSideSeats);
+        
+        return { left: leftSize, middle: fixedMiddle, right: rightSize };
+      }
+    }
+    
+    // Original logic for 4DX/ScreenX
+    const remainder = totalSeats % 3;
+    const baseSize = Math.floor(totalSeats / 3);
+    
+    if (remainder === 0) {
+      return { left: baseSize, middle: baseSize, right: baseSize };
+    } else if (remainder === 1) {
+      return { left: baseSize, middle: baseSize + 1, right: baseSize };
+    } else { // remainder === 2
+      return { left: baseSize, middle: baseSize + 2, right: baseSize };
+    }
   };
 
   // Use API seats if available, otherwise use dummy data
@@ -496,7 +601,7 @@ export default function BookingPage() {
                       {bookingInfo.theater} | {bookingInfo.cinema} | Remaining ({bookingInfo.remaining.current}/{bookingInfo.remaining.total})
                     </h2>
                     <p className="text-sm text-gray-700">
-                      {bookingInfo.date} {bookingInfo.showtime} ~ {bookingInfo.date} {bookingInfo.endTime}
+                      {bookingInfo.date} {bookingInfo.showtime} ~ {bookingInfo.crossesMidnight ? bookingInfo.endDate : bookingInfo.date} {bookingInfo.endTime}
                     </p>
                   </>
                 )}
@@ -542,25 +647,123 @@ export default function BookingPage() {
                   <div className="text-center py-10 text-gray-500">
                     No seats available
                   </div>
-                ) : (
-                  seatRows.map((rowData, rowIdx) => (
-                    <div key={rowIdx} className="flex items-center justify-center gap-1 mb-1">
-                      {rowData.seats.map((seat, seatIdx) => {
-                        const seatNumber = seat;
-                        return (
-                          <button
-                            key={seatIdx}
-                            onClick={() => handleSeatClick(seat)}
-                            disabled={occupiedSeats.includes(seat) || unavailableSeats.includes(seat)}
-                            className={`w-8 h-8 text-xs font-semibold border rounded transition-colors ${getSeatColor(seat, rowData.type)}`}
-                          >
-                            {seatNumber}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ))
-                )}
+                ) : (() => {
+                  // Calculate max seats for IMAX fixed middle
+                  const is4DXorScreenX = bookingInfo.movie.format === '4DX' || bookingInfo.movie.format === 'ScreenX';
+                  const isIMAX = bookingInfo.movie.format === 'IMAX';
+                  
+                  // For IMAX: Find standard rows to determine spacing
+                  let imaxMiddleSize = 0;
+                  if (isIMAX) {
+                    const standardRows = seatRows.filter(r => r.type === 'standard');
+                    if (standardRows.length > 0) {
+                      // Find min seats in standard rows (ensures all standard rows have at least 2 seats on each side)
+                      const minStandardSeats = Math.min(...standardRows.map(r => r.seats.length));
+                      // Middle size = min - 6 (3 left + 3 right minimum)
+                      imaxMiddleSize = Math.max(minStandardSeats - 6, 0);
+                    }
+                  }
+                  
+                  return seatRows.map((rowData, rowIdx) => {
+                    const rawSeats = rowData.rawSeats || [];
+                    const seatTypeGroups = (is4DXorScreenX || isIMAX) ? getSeatTypeGroups(rawSeats) : [];
+                    const sections = is4DXorScreenX ? getVerticalSections(rowData.seats.length) : null;
+                    
+                    return (
+                      <div key={rowIdx} className="flex items-center justify-center gap-1 mb-1">
+                        {is4DXorScreenX && seatTypeGroups.length > 0 ? (
+                          // 4DX/ScreenX layout with spacing
+                          <>
+                            {seatTypeGroups.map((group, groupIdx) => {
+                              const groupSeats = group.seats.map(s => `${s.row_char}${s.column_number}`);
+                              
+                              return (
+                                <React.Fragment key={groupIdx}>
+                                  {groupSeats.map((seat, idx) => {
+                                    const globalIdx = rowData.seats.indexOf(seat);
+                                    const addLeftSpace = sections && (globalIdx === sections.left || globalIdx === sections.left + sections.middle);
+                                    
+                                    return (
+                                      <React.Fragment key={idx}>
+                                        {addLeftSpace && <div className="w-4"></div>}
+                                        <button
+                                          onClick={() => handleSeatClick(seat)}
+                                          disabled={occupiedSeats.includes(seat) || unavailableSeats.includes(seat)}
+                                          className={`w-8 h-8 text-xs font-semibold border rounded transition-colors ${getSeatColor(seat, rowData.type)}`}
+                                        >
+                                          {seat}
+                                        </button>
+                                      </React.Fragment>
+                                    );
+                                  })}
+                                  {/* Add spacing between type groups (except after last group) */}
+                                  {groupIdx < seatTypeGroups.length - 1 && <div className="w-6"></div>}
+                                </React.Fragment>
+                              );
+                            })}
+                          </>
+                        ) : isIMAX && imaxMiddleSize > 0 ? (
+                          // IMAX layout with fixed middle spacing for all rows
+                          <>
+                            {rowData.seats.map((seat, idx) => {
+                              // Calculate spacing positions based on fixed middle size
+                              // All rows use the same middle size (from standard rows)
+                              const totalSeats = rowData.seats.length;
+                              
+                              // If row has fewer seats than middle size, put all in middle
+                              if (totalSeats <= imaxMiddleSize) {
+                                return (
+                                  <button
+                                    key={idx}
+                                    onClick={() => handleSeatClick(seat)}
+                                    disabled={occupiedSeats.includes(seat) || unavailableSeats.includes(seat)}
+                                    className={`w-8 h-8 text-xs font-semibold border rounded transition-colors ${getSeatColor(seat, rowData.type)}`}
+                                  >
+                                    {seat}
+                                  </button>
+                                );
+                              }
+                              
+                              // Distribute remaining seats to left and right
+                              const remaining = totalSeats - imaxMiddleSize;
+                              const leftSize = Math.floor(remaining / 2);
+                              
+                              // Add gap after left section and after middle section
+                              const addLeftSpace = idx === leftSize || idx === leftSize + imaxMiddleSize;
+                              
+                              return (
+                                <React.Fragment key={idx}>
+                                  {addLeftSpace && <div className="w-4"></div>}
+                                  <button
+                                    onClick={() => handleSeatClick(seat)}
+                                    disabled={occupiedSeats.includes(seat) || unavailableSeats.includes(seat)}
+                                    className={`w-8 h-8 text-xs font-semibold border rounded transition-colors ${getSeatColor(seat, rowData.type)}`}
+                                  >
+                                    {seat}
+                                  </button>
+                                </React.Fragment>
+                              );
+                            })}
+                          </>
+                        ) : (
+                          // Standard layout
+                          rowData.seats.map((seat, seatIdx) => {
+                            return (
+                              <button
+                                key={seatIdx}
+                                onClick={() => handleSeatClick(seat)}
+                                disabled={occupiedSeats.includes(seat) || unavailableSeats.includes(seat)}
+                                className={`w-8 h-8 text-xs font-semibold border rounded transition-colors ${getSeatColor(seat, rowData.type)}`}
+                              >
+                                {seat}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </div>
 
@@ -633,7 +836,9 @@ export default function BookingPage() {
                   <p className="text-sm text-gray-300">Theater</p>
                   <p className="font-bold">{bookingInfo.theater || 'Loading...'}</p>
                   <p className="text-sm text-gray-300">Showtimes</p>
-                  <p className="font-bold">{bookingInfo.showtime || '-'}, {bookingInfo.date || '-'}</p>
+                  <p className="font-bold">
+                    {bookingInfo.showtime || '-'}, {bookingInfo.date || '-'}
+                  </p>
                   <p className="text-sm text-gray-300">Screen</p>
                   <p className="font-bold">{bookingInfo.movie.screen || '-'}</p>
                 </div>
@@ -641,11 +846,11 @@ export default function BookingPage() {
                 {/* Pricing */}
                 <div className="text-right min-w-[150px]">
                   <p className="text-sm text-gray-300">Movie</p>
-                  <p className="font-bold">₫{total.toFixed(2)}</p>
+                  <p className="font-bold">₫{Math.round(total).toLocaleString()}</p>
                   <p className="text-sm text-gray-300">Combo</p>
-                  <p className="font-bold">₫{movieCombo.toFixed(2)}</p>
+                  <p className="font-bold">₫{Math.round(movieCombo).toLocaleString()}</p>
                   <p className="text-sm text-gray-300 mt-2">Total</p>
-                  <p className="font-bold text-xl text-yellow-400">₫{(total + movieCombo).toFixed(2)}</p>
+                  <p className="font-bold text-xl text-yellow-400">₫{Math.round(total + movieCombo).toLocaleString()}</p>
                 </div>
 
                 {/* Next Button */}

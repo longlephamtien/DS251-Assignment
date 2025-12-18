@@ -9,11 +9,11 @@ import reportWebVitals from './reportWebVitals';
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <PlatformProvider>
-      <DeviceProvider>
+    {/* <PlatformProvider> */}
+      {/* <DeviceProvider> */}
         <App />
-      </DeviceProvider>
-    </PlatformProvider>
+      {/* </DeviceProvider> */}
+    {/* </PlatformProvider> */}
   </React.StrictMode>
 );
 

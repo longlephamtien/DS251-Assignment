@@ -4,11 +4,21 @@ import Icon from '../components/common/Icon';
 export default function MembershipPage() {
   return (
     <div className="bg-background min-h-screen">
-      {/* Hero Section */}
-      <div className="bg-gradient-to-r from-primary to-secondary text-white py-16">
+      {/* Hero Section - Consistent with Movies Page */}
+      <div className="bg-white py-12">
         <div className="max-w-[1200px] mx-auto px-4">
-          <h1 className="text-4xl md:text-5xl font-bold mb-4">BKinema Membership</h1>
-          <p className="text-lg md:text-xl opacity-90">
+          <div className="relative mb-8">
+            <h2 className="text-3xl md:text-5xl font-bold text-center tracking-wider relative inline-block w-full">
+              <span className="relative z-10 bg-white px-6 text-gray-800" style={{
+                textShadow: '2px 2px 0px #e5e5e5, 4px 4px 0px #d4d4d4',
+                letterSpacing: '0.05em'
+              }}>
+                BKINEMA MEMBERSHIP
+              </span>
+              <div className="absolute top-1/2 left-0 right-0 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent -z-0" />
+            </h2>
+          </div>
+          <p className="text-center text-text-sub">
             Unlock exclusive benefits and rewards
           </p>
         </div>

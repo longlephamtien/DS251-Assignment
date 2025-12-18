@@ -71,7 +71,7 @@ export default function MovieDetailPage() {
   const getRatingColor = (rating) => {
     switch (rating) {
       case 'P': return 'bg-green-500';
-      case 'K': return 'bg-green-500';
+      case 'K': return 'bg-blue-500';
       case 'T13': return 'bg-yellow-500';
       case 'T16': return 'bg-orange-500';
       case 'T18': return 'bg-red-500';
@@ -250,10 +250,10 @@ export default function MovieDetailPage() {
 
               {/* Format Badges and Booking Button */}
               <div className="flex flex-wrap items-center gap-3 mb-6">
-                <span className="font-semibold text-gray-900">Rated:</span>
+                {/* <span className="font-semibold text-gray-900">Rated:</span>
                 <span className={`${getRatingColor(movie.ageRating)} text-white px-3 py-1 rounded font-bold`}>
                   {movie.ageRating}
-                </span>
+                </span> */}
                 <button
                   onClick={() => setShowBookingModal(true)}
                   className="ml-auto bg-primary hover:bg-secondary text-white px-8 py-3 rounded-lg font-bold text-lg transition-colors shadow-lg"
@@ -324,6 +324,7 @@ function BookingModal({ movie, dates, onClose }) {
   const [selectedFormat, setSelectedFormat] = useState('All');
   const [theaters, setTheaters] = useState([]);
   const [loadingTheaters, setLoadingTheaters] = useState(false);
+  const [loadingSchedules, setLoadingSchedules] = useState(false);
   const [theaterSchedules, setTheaterSchedules] = useState({});
   const [availableFormats, setAvailableFormats] = useState(['All']);
 
@@ -367,7 +368,7 @@ function BookingModal({ movie, dates, onClose }) {
     const fetchTheaters = async () => {
       try {
         setLoadingTheaters(true);
-        const data = await theaterService.getTheaters({ city: selectedCity });
+        const data = await theaterService.getTheaters({ city: selectedCity, limit: 50 });
         setTheaters(data || []);
       } catch (err) {
         console.error('Error fetching theaters:', err);
@@ -380,37 +381,90 @@ function BookingModal({ movie, dates, onClose }) {
     fetchTheaters();
   }, [selectedCity]);
 
+  // Helper function to format showtime display with date handling
+  const formatShowtimeDisplay = (startTime, endTime, showtimeDate) => {
+    const start = startTime.substring(0, 5);
+    const end = endTime.substring(0, 5);
+    
+    const [startHour, startMin] = start.split(':').map(Number);
+    const [endHour, endMin] = end.split(':').map(Number);
+    
+    const startMinutes = startHour * 60 + startMin;
+    const endMinutes = endHour * 60 + endMin;
+    
+    if (endMinutes < startMinutes) {
+      const date = new Date(showtimeDate);
+      date.setDate(date.getDate() + 1);
+      const nextDay = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return {
+        start,
+        end,
+        display: `${start} - ${end} (+1)`,
+        endDate: nextDay,
+        crossesMidnight: true
+      };
+    }
+    
+    return {
+      start,
+      end,
+      display: `${start} - ${end}`,
+      crossesMidnight: false
+    };
+  };
+
   // Fetch schedules for all theaters when date changes
   useEffect(() => {
     const fetchSchedules = async () => {
       if (theaters.length === 0) return;
 
-      const schedules = {};
-      for (const theater of theaters) {
-        try {
-          const schedule = await theaterService.getSchedule(theater.id, selectedDate);
+      setLoadingSchedules(true);
+      try {
+        // Fetch all schedules in parallel for better performance
+        const schedulePromises = theaters.map(async (theater) => {
+          try {
+            const schedule = await theaterService.getSchedule(theater.id, selectedDate);
+            // Filter schedule to only include showtimes for the current movie
+            const filteredSchedule = schedule ? schedule.filter(showtime =>
+              String(showtime.movie_id) === String(movie.id)
+            ).map(showtime => {
+              // Add formatted time display
+              const timeInfo = formatShowtimeDisplay(showtime.start_time, showtime.end_time, showtime.date);
+              return {
+                ...showtime,
+                time_display: timeInfo.display,
+                crosses_midnight: timeInfo.crossesMidnight,
+                end_date: timeInfo.endDate
+              };
+            }) : [];
+            return { theaterId: theater.id, schedule: filteredSchedule };
+          } catch (err) {
+            console.error(`Error fetching schedule for theater ${theater.id}:`, err);
+            return { theaterId: theater.id, schedule: null };
+          }
+        });
 
-          // Filter schedule to only include showtimes for the current movie
-          const filteredSchedule = schedule ? schedule.filter(showtime =>
-            String(showtime.movie_id) === String(movie.id)
-          ) : [];
+        const results = await Promise.all(schedulePromises);
+        
+        // Convert array to object
+        const schedules = {};
+        results.forEach(({ theaterId, schedule }) => {
+          schedules[theaterId] = schedule;
+        });
+        
+        setTheaterSchedules(schedules);
 
-          schedules[theater.id] = filteredSchedule;
-        } catch (err) {
-          console.error(`Error fetching schedule for theater ${theater.id}:`, err);
-          schedules[theater.id] = null;
+        // Extract unique auditorium types from all schedules
+        const allShowtimes = Object.values(schedules).flat().filter(Boolean);
+        const uniqueTypes = ['All', ...new Set(allShowtimes.map(s => s.auditorium_type).filter(Boolean))];
+        setAvailableFormats(uniqueTypes);
+
+        // Reset selected format if it's not available anymore
+        if (selectedFormat !== 'All' && !uniqueTypes.includes(selectedFormat)) {
+          setSelectedFormat('All');
         }
-      }
-      setTheaterSchedules(schedules);
-
-      // Extract unique auditorium types from all schedules
-      const allShowtimes = Object.values(schedules).flat().filter(Boolean);
-      const uniqueTypes = ['All', ...new Set(allShowtimes.map(s => s.auditorium_type).filter(Boolean))];
-      setAvailableFormats(uniqueTypes);
-
-      // Reset selected format if it's not available anymore
-      if (selectedFormat !== 'All' && !uniqueTypes.includes(selectedFormat)) {
-        setSelectedFormat('All');
+      } finally {
+        setLoadingSchedules(false);
       }
     };
 
@@ -502,6 +556,11 @@ function BookingModal({ movie, dates, onClose }) {
                 <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
                 <p className="text-gray-600 mt-4">Loading theaters...</p>
               </div>
+            ) : loadingSchedules ? (
+              <div className="text-center py-12">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                <p className="text-gray-600 mt-4">Loading showtimes...</p>
+              </div>
             ) : theaters.length === 0 ? (
               <div className="text-center py-12">
                 <Icon name="alert-circle" className="w-12 h-12 mx-auto mb-4 text-gray-400" />
@@ -509,7 +568,13 @@ function BookingModal({ movie, dates, onClose }) {
               </div>
             ) : (
               <div className="space-y-6">
-                {theaters.map((theater) => {
+                {theaters
+                  .filter((theater) => {
+                    const schedule = theaterSchedules[theater.id];
+                    // Only show theaters that have showtimes for this movie
+                    return schedule && Array.isArray(schedule) && schedule.length > 0;
+                  })
+                  .map((theater) => {
                   const schedule = theaterSchedules[theater.id];
 
                   return (
@@ -519,11 +584,9 @@ function BookingModal({ movie, dates, onClose }) {
                         {theater.street}, {theater.district}, {theater.city}
                       </p>
 
-                      {!schedule ? (
-                        <p className="text-sm text-gray-500 italic">Loading schedule...</p>
-                      ) : Array.isArray(schedule) && schedule.length > 0 ? (
+                      {Array.isArray(schedule) && schedule.length > 0 ? (
                         <div className="mt-4">
-                          {/* Group showtimes by auditorium type and filter by selected format */}
+                          {/* Filter by selected format and sort by time */}
                           {(() => {
                             // Filter by selected format first
                             const filteredSchedule = selectedFormat === 'All'
@@ -534,7 +597,13 @@ function BookingModal({ movie, dates, onClose }) {
                               return <p className="text-sm text-gray-500 italic">No showtimes available for selected format</p>;
                             }
 
-                            const groupedByType = filteredSchedule.reduce((acc, showtime) => {
+                            // Sort by start_time
+                            const sortedSchedule = [...filteredSchedule].sort((a, b) => {
+                              return a.start_time.localeCompare(b.start_time);
+                            });
+
+                            // Group by auditorium type for display
+                            const groupedByType = sortedSchedule.reduce((acc, showtime) => {
                               const type = showtime.auditorium_type || 'Standard';
                               if (!acc[type]) {
                                 acc[type] = [];
@@ -554,7 +623,7 @@ function BookingModal({ movie, dates, onClose }) {
                                       key={showtime.showtime_id}
                                       onClick={() => handleShowtimeClick(theater.id, showtime.showtime_id)}
                                       className="px-4 py-2 text-sm border border-gray-300 hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-colors font-medium"
-                                      title={`${showtime.start_time} - ${showtime.end_time} | Auditorium ${showtime.auditorium_number}`}
+                                      title={`${showtime.time_display || showtime.start_time + ' - ' + showtime.end_time} | Auditorium ${showtime.auditorium_number}`}
                                     >
                                       {showtime.start_time.substring(0, 5)}
                                     </button>
@@ -564,12 +633,19 @@ function BookingModal({ movie, dates, onClose }) {
                             ));
                           })()}
                         </div>
-                      ) : (
-                        <p className="text-sm text-gray-500 italic">No showtimes available for this date</p>
-                      )}
+                      ) : null}
                     </div>
                   );
                 })}
+                {theaters.filter((theater) => {
+                  const schedule = theaterSchedules[theater.id];
+                  return schedule && Array.isArray(schedule) && schedule.length > 0;
+                }).length === 0 && (
+                  <div className="text-center py-12">
+                    <Icon name="alert-circle" className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                    <p className="text-gray-600">No showtimes available in {selectedCity} for this date</p>
+                  </div>
+                )}
               </div>
             )}
           </div>

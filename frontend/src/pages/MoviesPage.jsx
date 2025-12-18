@@ -7,7 +7,7 @@ function MovieCard({ movie }) {
   const getRatingColor = (rating) => {
     switch (rating) {
       case 'P': return 'bg-green-500';
-      case 'K': return 'bg-green-500';
+      case 'K': return 'bg-blue-500';
       case 'T13': return 'bg-yellow-500';
       case 'T16': return 'bg-orange-500';
       case 'T18': return 'bg-red-500';

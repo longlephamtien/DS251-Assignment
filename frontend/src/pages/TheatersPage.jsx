@@ -113,6 +113,42 @@ export default function TheatersPage() {
     }
   };
 
+  // Helper function to format showtime display with date handling
+  // If end_time < start_time, it means the movie ends the next day
+  const formatShowtimeDisplay = (startTime, endTime, showtimeDate) => {
+    const start = startTime.substring(0, 5); // HH:MM
+    const end = endTime.substring(0, 5); // HH:MM
+    
+    // Compare times to detect if showtime crosses midnight
+    const [startHour, startMin] = start.split(':').map(Number);
+    const [endHour, endMin] = end.split(':').map(Number);
+    
+    const startMinutes = startHour * 60 + startMin;
+    const endMinutes = endHour * 60 + endMin;
+    
+    // If end time is earlier than start time, movie ends next day
+    if (endMinutes < startMinutes) {
+      // Parse the showtime date and add 1 day for end_time display
+      const date = new Date(showtimeDate);
+      date.setDate(date.getDate() + 1);
+      const nextDay = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return {
+        start,
+        end,
+        display: `${start} - ${end} (+1)`, // +1 indicates next day
+        endDate: nextDay,
+        crossesMidnight: true
+      };
+    }
+    
+    return {
+      start,
+      end,
+      display: `${start} - ${end}`,
+      crossesMidnight: false
+    };
+  };
+
   const processScheduleData = (data) => {
     if (!data || !Array.isArray(data)) return [];
 
@@ -141,10 +177,15 @@ export default function TheatersPage() {
         movie.formats.set(formatName, []);
       }
 
+      const timeInfo = formatShowtimeDisplay(item.start_time, item.end_time, item.date);
+      
       movie.formats.get(formatName).push({
         id: item.showtime_id,
-        start_time: item.start_time.substring(0, 5), // HH:MM
-        end_time: item.end_time
+        start_time: timeInfo.start,
+        end_time: timeInfo.end,
+        time_display: timeInfo.display,
+        crosses_midnight: timeInfo.crossesMidnight,
+        end_date: timeInfo.endDate
       });
     });
 
@@ -214,16 +255,30 @@ export default function TheatersPage() {
   };
 
   return (
-    <div className="bg-background min-h-screen py-12">
-      <div className="max-w-[1200px] mx-auto px-4">
+    <div className="bg-white min-h-screen">
+      <div className="bg-white py-12">
+        <div className="max-w-[1200px] mx-auto px-4">
+          {/* Section Header */}
+          <div className="relative mb-8">
+            <h2 className="text-3xl md:text-5xl font-bold text-center tracking-wider relative inline-block w-full">
+              <span className="relative z-10 bg-white px-6 text-gray-800" style={{
+                textShadow: '2px 2px 0px #e5e5e5, 4px 4px 0px #d4d4d4',
+                letterSpacing: '0.05em'
+              }}>
+                BKINEMA CINEMAS
+              </span>
+              <div className="absolute top-1/2 left-0 right-0 h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent -z-0" />
+            </h2>
+          </div>
+          
+          <p className="text-center text-text-sub mb-8">
+            Find your nearest theater
+          </p>
+
         {/* Main Container Box - Only for Cities and Theaters */}
         <div className="bg-white rounded-lg shadow-lg overflow-hidden border-4 border-primary mb-8">
           {/* City Selection Section */}
           <div className="bg-gray-50 p-8">
-            <h1 className="text-2xl md:text-3xl font-bold text-center text-gray-900 mb-6 tracking-wider">
-              BKINEMA CINEMAS
-            </h1>
-
             {/* Cities Grid */}
             <div className="grid grid-cols-5 gap-x-5 gap-y-3">
               {cities.map((city, idx) => (
@@ -300,7 +355,7 @@ export default function TheatersPage() {
             {/* Section Header - Same style as Movie Selection */}
             <div className="relative mb-10">
               <h2 className="text-3xl md:text-5xl font-bold text-center tracking-wider relative inline-block w-full">
-                <span className="relative z-10 bg-background px-6 text-gray-800" style={{
+                <span className="relative z-10 bg-white px-6 text-gray-800" style={{
                   textShadow: '2px 2px 0px #e5e5e5, 4px 4px 0px #d4d4d4',
                   letterSpacing: '0.05em'
                 }}>
@@ -521,14 +576,22 @@ export default function TheatersPage() {
                                             {format.showtimes.map((showtime) => (
                                               <button
                                                 key={showtime.id}
+                                                onClick={() => {
+                                                  const year = selectedDate.getFullYear();
+                                                  const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+                                                  const day = String(selectedDate.getDate()).padStart(2, '0');
+                                                  const dateStr = `${year}${month}${day}`;
+                                                  window.location.href = `/booking/tickets/theater/${selectedTheater.id}/showtime/${showtime.id}/date/${dateStr}`;
+                                                }}
                                                 className="group relative px-6 py-2 bg-white border border-gray-200 rounded-md 
                                                          hover:border-primary hover:shadow-md transition-all duration-200"
+                                                title={showtime.time_display || `${showtime.start_time} - ${showtime.end_time}`}
                                               >
                                                 <span className="text-lg font-bold text-gray-800 group-hover:text-primary transition-colors">
                                                   {showtime.start_time}
                                                 </span>
                                                 <div className="text-[10px] text-gray-400 text-center mt-0.5 group-hover:text-primary/70">
-                                                  ~ {showtime.end_time.substring(0, 5)}
+                                                  ~ {showtime.end_time}
                                                 </div>
                                               </button>
                                             ))}
@@ -591,6 +654,7 @@ export default function TheatersPage() {
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );
