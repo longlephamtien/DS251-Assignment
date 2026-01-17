@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bkinema-backend
+    ports:
+      - "8000:8000"
+    environment:
+      # Database config
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - AIVEN_SSL_CA_PATH=/app/certs/ca.pem
+      # JWT config
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
+      # App config
+      - PORT=8000
+      - NODE_ENV=production
+    volumes:
+      - ./backend/certs:/app/certs:ro
+    restart: unless-stopped
+    networks:
+      - bkinema-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: bkinema-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - bkinema-network
+
+networks:
+  bkinema-network:
+    driver: bridge

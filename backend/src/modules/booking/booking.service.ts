@@ -1,0 +1,164 @@
+import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import { DataSource } from 'typeorm';
+import { StartBookingDto } from './dto/start-booking.dto';
+import { UpdateFwbDto } from './dto/update-fwb.dto';
+
+@Injectable()
+export class BookingService {
+  constructor(private readonly dataSource: DataSource) {}
+
+  /**
+   * Gọi sp_start_booking:
+   *  - Tạo booking (Pending)
+   *  - Tạo các showtime_seat status = 'Held'
+   *  - Thêm F&B items (nếu có)
+   */
+  async startBooking(dto: StartBookingDto) {
+    const { customerId, showtimeId, seatIds, fwbItems } = dto;
+    const seatJson = JSON.stringify(seatIds);
+    const fwbJson = fwbItems && fwbItems.length > 0 ? JSON.stringify(fwbItems) : null;
+
+    console.log('=== START BOOKING DEBUG ===');
+    console.log('Customer ID:', customerId);
+    console.log('Showtime ID:', showtimeId);
+    console.log('Seat IDs:', seatIds);
+    console.log('Seat JSON:', seatJson);
+    console.log('F&B Items:', fwbItems);
+    console.log('F&B JSON:', fwbJson);
+    console.log('===========================');
+
+    try {
+      await this.dataSource.query(
+        'CALL sp_start_booking(?,?,?,?,@p_booking_id);',
+        [customerId, showtimeId, seatJson, fwbJson],
+      );
+
+      const [row] = await this.dataSource.query(
+        'SELECT @p_booking_id AS bookingId;',
+      );
+
+      return { bookingId: row.bookingId };
+    } catch (error: any) {
+      // SIGNAL trong MySQL trả về error.sqlMessage
+      throw new InternalServerErrorException(
+        error.sqlMessage || error.message || 'Failed to start booking',
+      );
+    }
+  }
+
+  /**
+   * DEPRECATED: F&B now handled in sp_start_booking
+   * Kept for backward compatibility
+   */
+  async updateBookingFwb(dto: UpdateFwbDto) {
+    const { bookingId, items } = dto;
+    const itemsJson = JSON.stringify(items);
+
+    try {
+      await this.dataSource.query(
+        'CALL sp_update_booking_fwb(?, ?, @p_total_fwb);',
+        [bookingId, itemsJson],
+      );
+
+      const [row] = await this.dataSource.query(
+        'SELECT @p_total_fwb AS totalFwb;',
+      );
+
+      return {
+        bookingId,
+        totalFwb: row.totalFwb ?? 0,
+      };
+    } catch (error: any) {
+      throw new InternalServerErrorException(
+        error.sqlMessage || error.message || 'Failed to update F&B',
+      );
+    }
+  }
+
+  /**
+   * Get booking details by ID (for countdown timer)
+   */
+  async getBookingDetails(bookingId: number) {
+    try {
+      const [booking] = await this.dataSource.query(
+        `SELECT 
+          id,
+          customer_id AS customerId,
+          status,
+          created_time_at AS createdAt,
+          booking_method AS bookingMethod,
+          is_gift AS isGift
+        FROM booking
+        WHERE id = ?`,
+        [bookingId]
+      );
+
+      if (!booking) {
+        throw new NotFoundException(`Booking ${bookingId} not found`);
+      }
+
+      return booking;
+    } catch (error: any) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        error.sqlMessage || error.message || 'Failed to get booking details'
+      );
+    }
+  }
+
+  /**
+   * Get all bookings for a customer with pagination
+   */
+  async getMyBookings(customerId: number, limit: number = 5, offset: number = 0) {
+    try {
+      const result = await this.dataSource.query(
+        'CALL sp_get_customer_bookings(?, ?, ?)',
+        [customerId, limit, offset]
+      );
+
+      // result[0] = bookings array
+      // result[1] = pagination metadata
+      const bookings = result[0] || [];
+      const paginationInfo = result[1]?.[0] || { totalCount: 0, limit, offset, hasMore: false };
+
+      return {
+        bookings,
+        pagination: {
+          totalCount: paginationInfo.totalCount,
+          limit: paginationInfo.limit,
+          offset: paginationInfo.offset,
+          hasMore: paginationInfo.hasMore === 1,
+          totalPages: Math.ceil(paginationInfo.totalCount / limit),
+        },
+      };
+    } catch (error: any) {
+      throw new InternalServerErrorException(
+        error.sqlMessage || error.message || 'Failed to fetch bookings',
+      );
+    }
+  }
+
+  /**
+   * Release booking seats without creating cancelled record
+   * Used when user goes back to change selection
+   */
+  async releaseBooking(bookingId: number) {
+    try {
+      await this.dataSource.query(
+        'CALL sp_release_booking(?)',
+        [bookingId]
+      );
+
+      return {
+        bookingId,
+        message: 'Booking released successfully'
+      };
+    } catch (error: any) {
+      throw new InternalServerErrorException(
+        error.sqlMessage || error.message || 'Failed to release booking',
+      );
+    }
+  }
+}

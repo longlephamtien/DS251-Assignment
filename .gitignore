@@ -1,0 +1,8 @@
+.DS_Store
+*.md
+!README.md
+
+# Environment variables
+.env
+.env.local
+.env.*.local
