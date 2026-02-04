@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: bkinema-backend
     ports:
-      - "8000:8000"
+      - "8001:8000"
     environment:
       # Database config
       - DB_HOST=${DB_HOST}
