@@ -1,6 +1,8 @@
-# 🎬 BKinema - Cinema Booking System
+# BKinema - Cinema Booking System
 
 A modern, full-stack cinema booking platform built with NestJS, React, and MySQL. This system provides comprehensive movie theater management, online booking, payment processing, and membership features.
+
+Real deployment website: https://bkinema.percytony.com/
 
 ![Tech Stack](https://img.shields.io/badge/NestJS-E0234E?style=for-the-badge&logo=nestjs&logoColor=white)
 ![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
@@ -8,34 +10,34 @@ A modern, full-stack cinema booking platform built with NestJS, React, and MySQL
 ![MySQL](https://img.shields.io/badge/MySQL-005C84?style=for-the-badge&logo=mysql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2CA5E0?style=for-the-badge&logo=docker&logoColor=white)
 
-## 📋 Table of Contents
+## Table of Contents
 
-- [Features](#-features)
-- [Tech Stack](#-tech-stack)
-- [Architecture](#-architecture)
-- [Database Design](#-database-design)
-- [Getting Started](#-getting-started)
-- [API Documentation](#-api-documentation)
-- [Deployment](#-deployment)
-- [Testing](#-testing)
-- [Project Structure](#-project-structure)
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Architecture](#architecture)
+- [Database Design](#database-design)
+- [Getting Started](#getting-started)
+- [API Documentation](#api-documentation)
+- [Deployment](#deployment)
+- [Testing](#testing)
+- [Project Structure](#project-structure)
 
-## ✨ Features
+## Features
 
-### 🎫 Core Booking System
+### Core Booking System
 - **Real-time seat selection** with automatic timeout mechanism
 - **Multiple auditorium types**: 2D, IMAX, ScreenX, 4DX
 - **Dynamic pricing** based on seat type and showtime
 - **Booking timeout management** - auto-cancel after 5 minutes
 - **Combo deals** for food & beverages during booking
 
-### 👤 Customer Management
+### Customer Management
 - **JWT-based authentication** with role-based access control
 - **User dashboard** with booking history and statistics
 - **Membership tiers** with point accumulation system
 - **Gift booking feature** - send movie tickets to friends
 
-### 💳 Payment & Promotions
+### Payment & Promotions
 - **Payment integration** with transaction tracking
 - **Coupon system** with multiple types:
   - Amount-based discounts
@@ -44,21 +46,21 @@ A modern, full-stack cinema booking platform built with NestJS, React, and MySQL
 - **Point redemption system**
 - **Refund management** with automated validation
 
-### 🎁 Advanced Features
+### Advanced Features
 - **Gift card purchase and redemption**
 - **Booking gifts** between users
 - **Sales reports** with detailed analytics
 - **Automated showtime cleanup** for expired bookings
 - **Health checks** and monitoring endpoints
 
-### 🎯 Admin Features
+### Admin Features
 - **Dashboard analytics** with revenue tracking
 - **Movie and showtime management**
 - **Theater and auditorium configuration**
 - **Coupon and promotion management**
 - **User and booking oversight**
 
-## 🛠 Tech Stack
+## Tech Stack
 
 ### Backend
 - **Framework**: NestJS (Node.js)
@@ -86,7 +88,7 @@ A modern, full-stack cinema booking platform built with NestJS, React, and MySQL
 - **Deployment**: VPS-ready with deployment guides
 - **Version Control**: Git
 
-## 🏗 Architecture
+## Architecture
 
 ```
 ┌─────────────────┐         ┌─────────────────┐         ┌─────────────────┐
@@ -129,7 +131,7 @@ The backend follows NestJS modular architecture with 20+ feature modules:
 - **FWB Menu Module**: Food & beverage combos
 - **Transaction Module**: Transaction history and reconciliation
 
-## 🗄 Database Design
+## Database Design
 
 ### Key Tables (20+ tables)
 
@@ -189,7 +191,7 @@ The backend follows NestJS modular architecture with 20+ feature modules:
 - Foreign key indexes
 - Composite indexes for complex searches
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -282,7 +284,7 @@ npm start
 - **Backend API**: http://localhost:8000/api
 - **API Documentation (Swagger)**: http://localhost:8000/api
 
-## 🐳 Docker Deployment
+## Docker Deployment
 
 ### Quick Start with Docker Compose
 
@@ -308,7 +310,7 @@ The application will be available at:
 docker-compose down
 ```
 
-## 📚 API Documentation
+## API Documentation
 
 ### Swagger/OpenAPI
 
@@ -377,7 +379,7 @@ Error responses:
 }
 ```
 
-## 🧪 Testing
+## Testing
 
 ### Backend Testing
 
@@ -420,7 +422,7 @@ npm test
 npm test -- --watch
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 bkinema/
@@ -519,9 +521,11 @@ bkinema/
 └── README.md                # This file
 ```
 
-## 🌐 Deployment
+## Deployment
 
 ### Production Deployment Options
+
+Live production website: https://bkinema.percytony.com/
 
 The project includes detailed deployment guides for multiple platforms:
 
@@ -590,19 +594,19 @@ curl http://localhost:8000/health
 # { "status": "ok", "database": "connected" }
 ```
 
-## 🤝 Contributing
+## Contributing
 
 This is an academic project developed for the Database Systems course (HK251 - Database).
 
-## 📝 License
+## License
 
 This project is developed for educational purposes.
 
-## 👥 Team
+## Team
 
 Developed by students from Ho Chi Minh City University of Technology (HCMUT) - Database Systems course.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **NestJS** - Progressive Node.js framework
 - **React** - UI library
@@ -610,12 +614,12 @@ Developed by students from Ho Chi Minh City University of Technology (HCMUT) - D
 - **MySQL** - Reliable database system
 - **Docker** - Containerization platform
 
-## 📞 Contact & Support
+## Contact & Support
 
 For questions or issues, please open an issue in the GitHub repository.
 
 ---
 
-**⭐ If you find this project helpful, please give it a star!**
+If you find this project helpful, please give it a star.
 
-Built with ❤️ using NestJS, React, and MySQL
+Built with NestJS, React, and MySQL
