@@ -14,7 +14,7 @@ export const seatService = {
         queryParams.append('auNumber', String(auNumber));
         queryParams.append('auTheaterId', String(auTheaterId));
 
-        const response = await fetch(`${API_BASE_URL}/api/seats?${queryParams.toString()}`);
+        const response = await fetch(`${API_BASE_URL}/seats?${queryParams.toString()}`);
 
         if (!response.ok) {
             // Try to get error details from response

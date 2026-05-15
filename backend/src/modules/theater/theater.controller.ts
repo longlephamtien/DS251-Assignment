@@ -2,7 +2,7 @@ import { Controller, Get, Query, HttpStatus, HttpException, Param } from '@nestj
 import { TheaterService } from './theater.service';
 import { GetTheatersQueryDto, ApiResponseDto, TheaterResponseDto } from './theater.dto';
 
-@Controller('api/theaters')
+@Controller('theaters')
 export class TheaterController {
     constructor(private readonly theaterService: TheaterService) { }
 

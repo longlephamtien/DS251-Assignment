@@ -2,7 +2,7 @@ import { Controller, Get, Query, HttpStatus, HttpException } from '@nestjs/commo
 import { ShowtimeSeatService } from './showtime-seat.service';
 import { ApiResponseDto, ShowtimeSeatResponseDto, GetShowtimeSeatsDto } from './showtime-seat.dto';
 
-@Controller('api/showtime-seats')
+@Controller('showtime-seats')
 export class ShowtimeSeatController {
     constructor(private readonly showtimeSeatService: ShowtimeSeatService) { }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Barcode from 'react-barcode';
 import Icon from '../components/common/Icon';
 import Notification from '../components/common/Notification';
@@ -2106,7 +2106,39 @@ const MembershipCardTab = () => {
 
 // Main CustomerPage Component
 const CustomerPage = () => {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const location = useLocation();
+
+  const resolveTabFromLocation = useCallback(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const requestedTab = searchParams.get('tab');
+    const allowedTabs = new Set([
+      'dashboard',
+      'account',
+      'bookings',
+      'membership',
+      'giftcard',
+      'voucher',
+      'coupon',
+      'refund',
+      'transactions',
+    ]);
+
+    if (requestedTab && allowedTabs.has(requestedTab)) {
+      return requestedTab;
+    }
+
+    if (location.pathname === '/my-tickets' || location.pathname === '/my-bookings') {
+      return 'bookings';
+    }
+
+    return 'dashboard';
+  }, [location.pathname, location.search]);
+
+  const [activeTab, setActiveTab] = useState(() => resolveTabFromLocation());
+
+  useEffect(() => {
+    setActiveTab(resolveTabFromLocation());
+  }, [resolveTabFromLocation]);
 
   const tabs = [
     { id: 'dashboard', label: 'DASHBOARD', icon: 'home' },

@@ -16,7 +16,7 @@ export const showtimeSeatService = {
         queryParams.append('seatAuNumber', String(seatAuNumber));
         queryParams.append('seatAuTheaterId', String(seatAuTheaterId));
 
-        const response = await fetch(`${API_BASE_URL}/api/showtime-seats?${queryParams.toString()}`);
+        const response = await fetch(`${API_BASE_URL}/showtime-seats?${queryParams.toString()}`);
 
         if (!response.ok) {
             // Try to get error details from response

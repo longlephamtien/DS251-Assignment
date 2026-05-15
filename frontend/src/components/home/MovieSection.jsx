@@ -103,10 +103,16 @@ export default function MovieSection() {
     navigate(`/movies/${movie.slug}`);
   };
 
-  const handleBooking = (e) => {
+  const handleBooking = (e, movie) => {
     e.preventDefault();
     e.stopPropagation();
-    navigate('/booking');
+
+    if (movie?.slug) {
+      navigate(`/movies/${movie.slug}`);
+      return;
+    }
+
+    navigate('/movies/now-showing');
   };
 
   // Check if we're at the start or end of scroll
@@ -254,7 +260,7 @@ export default function MovieSection() {
 
                           {/* Booking Button - Right */}
                           <button
-                            onClick={(e) => handleBooking(e)}
+                            onClick={(e) => handleBooking(e, movie)}
                             className="flex-1 bg-primary hover:bg-secondary text-white px-3 py-2 rounded-lg font-semibold text-md shadow-lg transition-all transform hover:scale-105 whitespace-nowrap"
                           >
                             Booking

@@ -9,9 +9,31 @@
  * All environment variables must be prefixed with REACT_APP_ to be accessible.
  */
 
+const normalizeApiUrl = (value) => {
+  const raw = (value || '').trim();
+  if (!raw) {
+    return '/api';
+  }
+
+  const unquoted = raw.replace(/^['"`](.*)['"`]$/, '$1').trim();
+  const trimmed = unquoted.replace(/\/+$/, '');
+
+  if (!trimmed) {
+    return '/api';
+  }
+
+  const deduped = trimmed.replace(/(?:\/api)+$/i, '/api');
+
+  if (/\/api$/i.test(deduped)) {
+    return deduped;
+  }
+
+  return `${deduped}/api`;
+};
+
 const config = {
   // API Configuration
-  apiUrl: process.env.REACT_APP_API_URL || 'http://localhost:8000',
+  apiUrl: normalizeApiUrl(process.env.REACT_APP_API_URL || 'http://localhost:8000/api'),
   
   // Feature Flags
   featureFlag: process.env.REACT_APP_FEATURE_FLAG === 'true',

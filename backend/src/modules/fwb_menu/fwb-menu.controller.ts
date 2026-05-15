@@ -2,7 +2,7 @@ import { Controller, Get, HttpStatus } from '@nestjs/common';
 import { FwbMenuService } from './fwb-menu.service';
 import { FwbMenuResponseDto } from './fwb-menu.dto';
 
-@Controller('api/fwb-menu')
+@Controller('fwb-menu')
 export class FwbMenuController {
     constructor(private readonly fwbMenuService: FwbMenuService) { }
 

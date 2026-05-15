@@ -2,7 +2,7 @@ import { Controller, Get, Query, HttpStatus, HttpException } from '@nestjs/commo
 import { AuditoriumService } from './auditorium.service';
 import { GetAuditoriumByIdDto, ApiResponseDto, AuditoriumResponseDto } from './auditorium.dto';
 
-@Controller('api/auditoriums')
+@Controller('auditoriums')
 export class AuditoriumController {
     constructor(private readonly auditoriumService: AuditoriumService) { }
 

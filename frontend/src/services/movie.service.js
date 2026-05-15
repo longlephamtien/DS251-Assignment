@@ -17,7 +17,7 @@ export const movieService = {
         if (params.limit !== undefined) queryParams.append('limit', String(params.limit));
         if (params.offset !== undefined) queryParams.append('offset', String(params.offset));
 
-        const response = await fetch(`${API_BASE_URL}/api/movies?${queryParams.toString()}`);
+        const response = await fetch(`${API_BASE_URL}/movies?${queryParams.toString()}`);
 
         if (!response.ok) {
             // Try to get error details from response
@@ -48,7 +48,7 @@ export const movieService = {
      * @returns {Promise<Object>} Movie details with all related information
      */
     async getMovieBySlug(slug) {
-        const response = await fetch(`${API_BASE_URL}/api/movies/${slug}`);
+        const response = await fetch(`${API_BASE_URL}/movies/${slug}`);
 
         if (!response.ok) {
             if (response.status === 404) {
@@ -72,7 +72,7 @@ export const movieService = {
      * @returns {Promise<Object>} Movie details
      */
     async getMovieById(id) {
-        const response = await fetch(`${API_BASE_URL}/api/movies/id/${id}`);
+        const response = await fetch(`${API_BASE_URL}/movies/id/${id}`);
 
         if (!response.ok) {
             if (response.status === 404) {

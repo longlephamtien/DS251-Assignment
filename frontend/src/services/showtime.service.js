@@ -9,7 +9,7 @@ export const showtimeService = {
      * @returns {Promise<Object>} Showtime details including movie, auditorium, and time information
      */
     async getShowtimeById(showtimeId) {
-        const response = await fetch(`${API_BASE_URL}/api/showtimes/${showtimeId}`);
+        const response = await fetch(`${API_BASE_URL}/showtimes/${showtimeId}`);
 
         if (!response.ok) {
             // Try to get error details from response

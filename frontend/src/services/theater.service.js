@@ -11,7 +11,7 @@ export const theaterService = {
         if (params.limit !== undefined) queryParams.append('limit', String(params.limit));
         if (params.offset !== undefined) queryParams.append('offset', String(params.offset));
 
-        const response = await fetch(`${API_BASE_URL}/api/theaters?${queryParams.toString()}`);
+        const response = await fetch(`${API_BASE_URL}/theaters?${queryParams.toString()}`);
 
         if (!response.ok) {
             // Try to get error details from response
@@ -37,7 +37,7 @@ export const theaterService = {
     },
 
     async getTheaterById(theaterId) {
-        const response = await fetch(`${API_BASE_URL}/api/theaters/${theaterId}`);
+        const response = await fetch(`${API_BASE_URL}/theaters/${theaterId}`);
 
         if (!response.ok) {
             // Try to get error details from response
@@ -63,7 +63,7 @@ export const theaterService = {
     },
 
     async getSchedule(theaterId, date) {
-        const response = await fetch(`${API_BASE_URL}/api/theaters/${theaterId}/schedule?date=${date}`);
+        const response = await fetch(`${API_BASE_URL}/theaters/${theaterId}/schedule?date=${date}`);
 
         if (!response.ok) {
             // Try to get error details from response

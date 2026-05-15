@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 import Header from './components/Header';
 import Footer from './components/Footer';
@@ -46,12 +46,16 @@ function App() {
               <Route path="/booking/payment/theater/:theaterId/showtime/:showtimeId/date/:date" element={<PaymentPage />} />
               <Route path="/payment/:bookingId" element={<PaymentPage />} />
               <Route path="/theaters" element={<TheatersPage />} />
-              <Route path="/gift" element={<GiftCardPage />} />
               <Route path="/gift-cards" element={<GiftCardPage />} />
+              <Route path="/gift" element={<Navigate to="/gift-cards" replace />} />
+              <Route path="/services" element={<Navigate to="/gift-cards" replace />} />
+              <Route path="/services/gift-cards" element={<Navigate to="/gift-cards" replace />} />
+              <Route path="/services/vouchers" element={<Navigate to="/vouchers" replace />} />
+              <Route path="/vouchers" element={<GiftCardPage />} />
               <Route path="/customer" element={<CustomerPage />} />
               <Route path="/my-account" element={<CustomerPage />} />
-              <Route path="/customer" element={<CustomerPage />} />
-              <Route path="/my-account" element={<CustomerPage />} />
+              <Route path="/my-tickets" element={<CustomerPage />} />
+              <Route path="/my-bookings" element={<CustomerPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
             </Routes>

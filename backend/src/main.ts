@@ -6,10 +6,8 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
-  // Set global prefix for all routes
-  app.setGlobalPrefix('api');
-  
   app.enableCors();
+  app.setGlobalPrefix('api', { exclude: ['health'] });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -50,5 +48,6 @@ async function bootstrap() {
   
   console.log(`Application is running on: http://localhost:${port}`);
   console.log(`Swagger documentation: http://localhost:${port}/api`);
+  console.log(`API base URL: http://localhost:${port}/api`);
 }
 bootstrap();

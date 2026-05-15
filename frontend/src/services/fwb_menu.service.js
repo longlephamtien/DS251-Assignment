@@ -8,7 +8,7 @@ export const fwbMenuService = {
      * @returns {Promise<Array>} Array of FWB menu items
      */
     async getAllFwbMenu() {
-        const response = await fetch(`${API_BASE_URL}/api/fwb-menu`);
+        const response = await fetch(`${API_BASE_URL}/fwb-menu`);
 
         if (!response.ok) {
             // Try to get error details from response

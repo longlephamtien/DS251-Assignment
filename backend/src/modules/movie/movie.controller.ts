@@ -2,7 +2,7 @@ import { Controller, Get, Query, HttpStatus, HttpException, Param } from '@nestj
 import { MovieService } from './movie.service';
 import { GetMoviesQueryDto, ApiResponseDto, MovieResponseDto } from './movie.dto';
 
-@Controller('api/movies')
+@Controller('movies')
 export class MovieController {
     constructor(private readonly movieService: MovieService) { }
 

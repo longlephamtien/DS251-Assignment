@@ -8,7 +8,7 @@ export const auditoriumService = {
         queryParams.append('number', String(number));
         queryParams.append('theaterId', String(theaterId));
 
-        const response = await fetch(`${API_BASE_URL}/api/auditoriums?${queryParams.toString()}`);
+        const response = await fetch(`${API_BASE_URL}/auditoriums?${queryParams.toString()}`);
 
         if (!response.ok) {
             // Try to get error details from response
